@@ -1,0 +1,46 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded / processed wardrobe images (keep folder structure)
+backend/wardrobe_images/original/*
+backend/wardrobe_images/processed/*
+!backend/wardrobe_images/original/.gitkeep
+!backend/wardrobe_images/processed/.gitkeep
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
