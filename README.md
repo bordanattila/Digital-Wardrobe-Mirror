@@ -1,7 +1,7 @@
 # Digital Wardrobe Mirror
 
-[![Tests](https://github.com/bordanattila/DigitalWardrobeMirror/actions/workflows/test.yml/badge.svg)](https://github.com/bordanattila/DigitalWardrobeMirror/actions/workflows/test.yml)
-[![Ruff](https://github.com/bordanattila/DigitalWardrobeMirror/actions/workflows/ruff.yml/badge.svg)](https://github.com/bordanattila/DigitalWardrobeMirror/actions/workflows/ruff.yml)
+[![Tests](https://github.com/bordanattila/Digital-Wardrobe-Mirror/actions/workflows/test.yml/badge.svg)](https://github.com/bordanattila/Digital-Wardrobe-Mirror/actions/workflows/test.yml)
+[![Ruff](https://github.com/bordanattila/Digital-Wardrobe-Mirror/actions/workflows/ruff.yml/badge.svg)](https://github.com/bordanattila/Digital-Wardrobe-Mirror/actions/workflows/ruff.yml)
 
 A smart digital wardrobe application that organizes clothing, checks local weather conditions, and recommends outfits based on what is already in your closet.
 

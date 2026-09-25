@@ -16,7 +16,8 @@ class Database:
         Args:
             db_file: Path to the SQLite database file (e.g. wardrobe.db).
         """
-        self.conn = sqlite3.connect(db_file)
+        self.conn = sqlite3.connect(db_file, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
 
     def create_table(self):
