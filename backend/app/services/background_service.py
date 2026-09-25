@@ -7,7 +7,6 @@ Path checks, extension allowlisting, and size limits defend against
 path traversal and oversized or non-image uploads.
 """
 
-import sys
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
@@ -61,58 +60,60 @@ def remove_background(image):
     return image
 
 
+def process_image(image_path: Path) -> Path:
+    """Process an image by removing the background and saving it to the background
+    removed images directory."""
+    image_path = image_path.resolve()
+
+    # Skip non-files and anything that escaped ORIGINAL_IMAGES_DIR (e.g. symlinks)
+    if not image_path.is_file() or not is_path_inside_directory(
+        image_path, ORIGINAL_IMAGES_DIR
+    ):
+        raise ValueError(
+            f"Image path {image_path} is not inside the original images directory"
+        )
+
+    # Sanitize the filename stem before building the output path.
+    # file.stem = name without extension, e.g. "blue shirt!.png" -> "blue shirt!"
+    # Keep only letters, digits, hyphen, underscore — drop spaces, "!", "../", etc.
+    # "".join(...) builds the cleaned string; if nothing remains
+    # (e.g. stem was "!!!"),
+    # `or "item"` falls back so we never write a nameless file like bg_removed_.png.
+    safe_stem = (
+        "".join(c for c in image_path.stem if c.isalnum() or c in "-_") or "item"
+    )
+    out_name = f"bg_removed_{safe_stem}{image_path.suffix.lower()}"
+    out_path = (BACKGROUND_REMOVED_IMAGES_DIR / out_name).resolve()
+
+    # Final confinement check on the destination we are about to write
+    if not is_path_inside_directory(out_path, BACKGROUND_REMOVED_IMAGES_DIR):
+        raise ValueError(
+            f"Output path \
+            {out_path} \
+            is not inside the background removed images directory"
+        )
+
+    try:
+        with Image.open(image_path) as image:
+            image.load()  # force decode now so corrupt/non-images fail here
+            print(f"Processing image: {image_path.name}")
+            background_removed = remove_background(image)
+            background_removed.save(out_path)
+    except UnidentifiedImageError as exc:
+        raise ValueError(f"Image {image_path} is not a valid image: {exc}")
+    except OSError as exc:
+        raise ValueError(f"Error processing image {image_path}: {exc}")
+
+    # Only this verified processed path is safe to store in the database later
+    verified_image_path = str(out_path)
+    print(f"{GREEN}Processed: {image_path.name} -> {verified_image_path}{RESET}")
+    return Path(verified_image_path)
+
+
 if __name__ == "__main__":
     print(f"Processing images in {ORIGINAL_IMAGES_DIR}")
     for file in ORIGINAL_IMAGES_DIR.iterdir():
-        file = file.resolve()
-
-        # Skip non-files and anything that escaped ORIGINAL_IMAGES_DIR (e.g. symlinks)
-        if not file.is_file() or not is_path_inside_directory(
-            file, ORIGINAL_IMAGES_DIR
-        ):
-            continue
-
-        # Reject oversized files before PIL loads them into memory
-        if file.stat().st_size > MAX_IMAGE_SIZE:
-            print(f"{RED}Skipping (too large): {file.name}{RESET}", file=sys.stderr)
-            continue
-
-        if file.suffix.lower() not in ALLOWED_EXTENSIONS:
-            continue
-
-        # Sanitize the filename stem before building the output path.
-        # file.stem = name without extension, e.g. "blue shirt!.png" -> "blue shirt!"
-        # Keep only letters, digits, hyphen, underscore — drop spaces, "!", "../", etc.
-        # "".join(...) builds the cleaned string; if nothing remains
-        # (e.g. stem was "!!!"),
-        # `or "item"` falls back so we never write a nameless file like bg_removed_.png.
-        safe_stem = "".join(c for c in file.stem if c.isalnum() or c in "-_") or "item"
-        out_name = f"bg_removed_{safe_stem}{file.suffix.lower()}"
-        out_path = (BACKGROUND_REMOVED_IMAGES_DIR / out_name).resolve()
-
-        # Final confinement check on the destination we are about to write
-        if not is_path_inside_directory(out_path, BACKGROUND_REMOVED_IMAGES_DIR):
-            print(
-                f"{RED}Skipping (unsafe out path): {out_name}{RESET}", file=sys.stderr
-            )
-            continue
-
         try:
-            with Image.open(file) as image:
-                image.load()  # force decode now so corrupt/non-images fail here
-                print(f"Processing image: {file.name}")
-                background_removed_image = remove_background(image)
-                background_removed_image.save(out_path)
-        except UnidentifiedImageError:
-            print(
-                f"{RED}Skipping (unidentified image): {file.name}{RESET}",
-                file=sys.stderr,
-            )
-            continue
-        except OSError as exc:
-            print(f"{RED}Skipping (error): {file.name}: {exc}{RESET}", file=sys.stderr)
-            continue
-
-        # Only this verified processed path is safe to store in the database later
-        verified_image_path = str(out_path)
-        print(f"{GREEN}Processed: {file.name} -> {verified_image_path}{RESET}")
+            process_image(file)
+        except ValueError as exc:
+            print(f"{RED}Error processing image {file}: {exc}{RESET}")
