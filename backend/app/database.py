@@ -68,6 +68,29 @@ class Database:
         self.cursor.execute("SELECT * FROM ClothingItems WHERE id = ?", (item_id,))
         return self.cursor.fetchone()
 
+    def update_clothing_item_by_id(
+        self, item_id, item_name, item_color, item_size, item_category, item_subcategory
+    ):
+        """Update metadata for one row; item_image_path is not changed."""
+        self.cursor.execute(
+            """UPDATE ClothingItems SET item_name = ?, item_color = ?, item_size = ?,
+            item_category = ?, item_subcategory = ? WHERE id = ?""",
+            (
+                item_name,
+                item_color,
+                item_size,
+                item_category,
+                item_subcategory,
+                item_id,
+            ),
+        )
+        self.conn.commit()
+
+    def delete_clothing_item_by_id(self, item_id):
+        """Delete one row by primary key."""
+        self.cursor.execute("DELETE FROM ClothingItems WHERE id = ?", (item_id,))
+        self.conn.commit()
+
     def close(self):
         """Close the database connection."""
         self.conn.close()

@@ -8,15 +8,16 @@ The FastAPI *router* should only speak HTTP:
   - turn results into a response, or ValueError into HTTPException
 
 This *service* owns the business workflow:
-  - "list all clothing items"
-  - "create a clothing item from an uploaded photo"
+  - list / get / create / update / delete clothing items
+  - save uploads, run background removal, clean up files on delete
 
 It calls lower-level helpers:
-  - Database          -> SQL insert / select
-  - background_service -> save-policy constants + process_image()
+  - Database           -> SQL insert / select / update / delete
+  - background_service -> path constants + process_image()
 
 RULE: do not import FastAPI or raise HTTPException here.
-      Raise ValueError for bad input; the router maps that to status 400.
+      Raise ValueError for bad input or missing IDs.
+      The router maps those to HTTP 400 (validation) or 404 (not found).
 """
 
 import uuid
@@ -56,7 +57,42 @@ def list_clothing_items(db: Database) -> list[ClothingItem]:
     return [_row_to_clothing_item(row) for row in rows]
 
 
-def create_clothing_item(
+def get_one_clothing_item_by_id(db: Database, item_id: int) -> ClothingItem:
+    """Fetch one clothing item by ID and return it as a ClothingItem schema.
+
+    Raises:
+        ValueError: if no row exists for item_id (router maps to HTTP 404).
+    """
+    row = db.get_clothing_item_by_id(item_id)
+    if row is None:
+        raise ValueError(f"Clothing item with ID {item_id} not found")
+    return _row_to_clothing_item(row)
+
+
+def update_item_by_id(
+    db: Database,
+    item_id: int,
+    item_name: str,
+    item_color: str,
+    item_size: str,
+    item_category: str,
+    item_subcategory: str,
+) -> ClothingItem:
+    """Update metadata for one item; image_path is left unchanged.
+
+    Raises:
+        ValueError: if no row exists for item_id (router maps to HTTP 404).
+    """
+    row = db.get_clothing_item_by_id(item_id)
+    if row is None:
+        raise ValueError(f"Clothing item with ID {item_id} not found")
+    db.update_clothing_item_by_id(
+        item_id, item_name, item_color, item_size, item_category, item_subcategory
+    )
+    return get_one_clothing_item_by_id(db, item_id)
+
+
+def create_item(
     db: Database,
     name: str,
     color: str,
@@ -126,3 +162,27 @@ def create_clothing_item(
         # Service raised ValueError("File too large") etc. -> HTTP 400 for clients.
         saved_path.unlink(missing_ok=True)
         raise
+
+
+def remove_clothing_item_by_id(db: Database, item_id: int) -> None:
+    """Delete one clothing item and its image files on disk.
+
+    Uses item_image_path (processed file). If the name is bg_removed_<file>,
+    also removes the matching upload under ORIGINAL_IMAGES_DIR.
+
+    Raises:
+        ValueError: if no row exists for item_id (router maps to HTTP 404).
+    """
+    row = db.get_clothing_item_by_id(item_id)
+    if row is None:
+        raise ValueError(f"Clothing item with ID {item_id} not found")
+    db.delete_clothing_item_by_id(item_id)
+
+    # Delete processed image; derive original name from bg_removed_ prefix
+    processed_path = Path(row["item_image_path"])
+    name = processed_path.name
+    if name.startswith("bg_removed_"):
+        original_name = name.removeprefix("bg_removed_")
+        original_path = ORIGINAL_IMAGES_DIR / original_name
+        original_path.unlink(missing_ok=True)
+    processed_path.unlink(missing_ok=True)

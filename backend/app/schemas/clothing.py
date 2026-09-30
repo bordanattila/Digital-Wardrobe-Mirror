@@ -14,6 +14,7 @@ class ClothingItem(BaseModel):
 
 
 class ClothingItemUpdate(BaseModel):
+    id: int
     name: Optional[str] = None
     color: Optional[str] = None
     size: Optional[str] = None
