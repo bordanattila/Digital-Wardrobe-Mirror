@@ -38,6 +38,21 @@ def test_missing_item(db):
     assert db.get_clothing_item_by_id(1) is None
 
 
+def test_update_clothing_item_by_id(db):
+    db.add_clothing_item("Tee", "blue", "M", "tops", "tshirt", "/img/tee.png")
+    db.update_clothing_item_by_id(1, "Polo", "green", "L", "tops", "polo")
+    row = db.get_clothing_item_by_id(1)
+    assert row["item_name"] == "Polo"
+    assert row["item_color"] == "green"
+    assert row["item_image_path"] == "/img/tee.png"  # unchanged
+
+
+def test_delete_clothing_item_by_id(db):
+    db.add_clothing_item("Tee", "blue", "M", "tops", "tshirt", "/img/tee.png")
+    db.delete_clothing_item_by_id(1)
+    assert db.get_clothing_item_by_id(1) is None
+
+
 def test_close(tmp_path):
     database = Database(tmp_path / "test.db")
     database.close()
