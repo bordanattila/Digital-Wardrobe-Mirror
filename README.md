@@ -5,7 +5,7 @@
 
 A smart digital wardrobe application that organizes clothing, checks local weather conditions, and recommends outfits based on what is already in your closet.
 
-The long-term goal is to run the application on a **Raspberry Pi connected to a display behind a two-way mirror**, creating a physical smart mirror that can suggest an outfit each morning.
+The long-term goal is to run the deterministic stack on a **Raspberry Pi 5 connected to a display behind a two-way mirror**, with optional LLM reasoning (local home model or cloud — undecided) for preference-heavy outfit requests.
 
 The project is currently being developed as a **desktop prototype** before any Raspberry Pi or mirror hardware is introduced.
 
@@ -131,16 +131,16 @@ Relevant weather information may include:
 
 ### Outfit Recommendation Engine
 
-The application selects clothing from the wardrobe based on current weather conditions.
+Outfit recommendations are split into two layers.
 
-A basic recommendation flow may look like:
+**Deterministic (on-device):** weather, tags, and hard constraints are handled by the local outfit algorithm — no LLM required. Example: *47°F and raining → eliminate shorts, sandals, and light jackets; keep cool-weather and rain-compatible candidates.*
 
 ```text
 Current Weather
       ↓
 Determine Clothing Requirements
       ↓
-Filter Wardrobe
+Filter Wardrobe (rules / tags)
       ↓
 Select Compatible Items
       ↓
@@ -149,20 +149,32 @@ Build Outfit
 Display Recommendation
 ```
 
-For example, colder weather may prioritize:
+For example, colder weather may prioritize long pants, sweaters, jackets, and closed shoes; warmer weather may prioritize T-shirts, shorts, and lightweight clothing.
 
-* Long pants
-* Sweaters
-* Jackets
-* Closed shoes
+**Reasoning (optional LLM):** higher-level requests — occasion, style relative to recent outfits, “not overdressed” — go to a local or cloud reasoning model. The Pi (or desktop prototype) builds a small structured context and sends that payload, for example:
 
-Warmer weather may prioritize:
+```json
+{
+  "weather": {
+    "temperature": 47,
+    "condition": "rain"
+  },
+  "occasion": "casual dinner",
+  "available_clothing": [
+    "dark jeans",
+    "navy chinos",
+    "white oxford",
+    "gray sweater",
+    "brown boots"
+  ],
+  "recently_worn": [
+    "dark jeans",
+    "black hoodie"
+  ]
+}
+```
 
-* T-shirts
-* Shorts
-* Lightweight clothing
-
-The recommendation logic can become more sophisticated as the project grows.
+Whether the reasoning model runs on a home PC (LM Studio / Ollama) or in the cloud (OpenAI / etc.) is still undecided.
 
 ---
 
@@ -180,7 +192,8 @@ The backend handles:
 * Wardrobe data
 * Image processing
 * Weather data
-* Outfit recommendation logic
+* Deterministic outfit recommendation logic
+* Optional structured reasoning requests to an LLM
 * API endpoints
 
 ### Frontend
@@ -247,7 +260,37 @@ As development continues, additional services, models, schemas, components, and 
 
 ## Architecture
 
-The project separates presentation, API handling, business logic, and persistence.
+The long-term target puts the **full deterministic stack on a Raspberry Pi 5**. Local software owns the wardrobe, weather, rule-based outfit filtering, camera/sensors, background removal, and voice I/O. An LLM is used only for higher-level reasoning requests, via a small structured context payload.
+
+Local vs cloud hosting for that reasoning model is still an open decision.
+
+```text
+                   DIGITAL WARDROBE MIRROR
+
+┌──────────────────────────────────────────────┐
+│               Raspberry Pi 5                 │
+│                                              │
+│  React / Mirror UI                           │
+│  FastAPI                                     │
+│  SQLite wardrobe.db                          │
+│  Weather service                             │
+│  Outfit algorithm                            │
+│  Camera / sensors                            │
+│  Background removal                          │
+│  Voice input/output                          │
+│                                              │
+│          ↓ reasoning request                 │
+└──────────────────────┬───────────────────────┘
+                       │
+             ┌─────────┴──────────┐
+             │                    │
+             ▼                    ▼
+      LOCAL HOME MODEL        CLOUD MODEL
+      PC / workstation        OpenAI/etc.
+      LM Studio / Ollama
+```
+
+During Phase 1, the same software runs as a **desktop prototype** (React/Vite UI ↔ FastAPI ↔ SQLite and services). Presentation, API, business logic, and persistence stay separated so components can be replaced later without redesigning the whole app.
 
 ```text
 ┌──────────────────────────────┐
@@ -269,10 +312,9 @@ The project separates presentation, API handling, business logic, and persistenc
                   │
                   ├─ Background Removal
                   ├─ Weather
-                  └─ Outfit Selection
+                  ├─ Outfit Selection (deterministic)
+                  └─ Reasoning request (optional LLM)
 ```
-
-This separation makes it easier to replace individual components later without redesigning the entire application.
 
 ---
 
@@ -408,7 +450,7 @@ Responsible for retrieving and exposing weather information used by the applicat
 backend/app/routers/outfits.py
 ```
 
-Responsible for generating outfit recommendations using wardrobe and weather information.
+Responsible for generating outfit recommendations: local rule-based selection from wardrobe and weather, plus optional structured reasoning requests to a local or cloud LLM.
 
 ---
 
@@ -430,16 +472,9 @@ Browser UI
 
 ### Phase 2 — Improve Outfit Intelligence
 
-Expand the recommendation engine with additional factors such as:
+Strengthen the **on-device** deterministic engine (tags, weather rules, rain, layering, recently worn, favorites, user feedback) so routine morning picks stay fast and local.
 
-* Clothing color compatibility
-* Layering
-* Seasonal preferences
-* Rain conditions
-* Formal vs. casual outfits
-* Recently worn clothing
-* Favorite combinations
-* User feedback
+Separately, add an optional **reasoning path**: build structured context from wardrobe + weather + occasion, send it to a local or cloud LLM, and return suggestions for preference-heavy requests. Hosting choice (home PC vs cloud) remains open.
 
 ### Phase 3 — Smart Mirror Interface
 
@@ -464,22 +499,22 @@ Today's Forecast
 
 ### Phase 4 — Raspberry Pi Deployment
 
-Move the application from the development computer to a Raspberry Pi.
-
-Potential hardware architecture:
+Move the deterministic stack onto a Raspberry Pi 5 behind a two-way mirror. The Pi runs UI, API, database, weather, outfit algorithm, and related local services; reasoning requests (if enabled) go out to whichever model host is chosen.
 
 ```text
-Raspberry Pi
+Raspberry Pi 5
      │
-     ├── FastAPI Backend
-     ├── SQLite Database
-     ├── React Interface
+     ├── React / Mirror UI
+     ├── FastAPI
+     ├── SQLite wardrobe.db
+     ├── Weather + outfit algorithm
+     ├── Camera / sensors, background removal, voice (as added)
+     │
+     ├──→ optional: local home model (LM Studio / Ollama)
+     └──→ optional: cloud model (OpenAI / etc.)
      │
      ▼
-Monitor / Display
-     │
-     ▼
-Two-Way Mirror
+Monitor / Display → Two-Way Mirror
 ```
 
 ### Phase 5 — Advanced Features
@@ -490,13 +525,10 @@ Possible future additions include:
 * Clothing usage statistics
 * Laundry status
 * Favorite outfits
-* Calendar-aware recommendations
-* Dress-code awareness
-* AI-generated outfit suggestions
+* Calendar-aware / dress-code recommendations
 * Voice interaction
 * Touch or gesture controls
-* Automatic wardrobe categorization
-* Clothing recognition
+* Automatic wardrobe categorization / clothing recognition
 * Personalized recommendation learning
 * Morning brief integration
 
@@ -508,15 +540,14 @@ Digital Wardrobe Mirror is both a practical smart-home project and an opportunit
 
 * Full-stack web development
 * Python APIs
-* Computer vision
-* Image processing
+* Computer vision and image processing
 * External APIs
-* Recommendation algorithms
-* Raspberry Pi development
-* Smart-home hardware
+* Deterministic recommendation algorithms on-device
+* Optional LLM reasoning with structured context
+* Raspberry Pi / smart-mirror hardware
 * AI-assisted software development
 
-The project is intentionally being built incrementally so that the software can be tested independently before introducing hardware complexity.
+The project is intentionally built incrementally so software can be validated on a desktop before introducing hardware complexity.
 
 ---
 
