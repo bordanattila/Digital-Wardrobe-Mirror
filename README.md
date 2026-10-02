@@ -368,6 +368,11 @@ Start the FastAPI development server:
 uvicorn app.main:app --reload
 ```
 
+```bash
+# BETTER for local-only access
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
 The API will normally be available at:
 
 ```text
@@ -421,6 +426,8 @@ Vite will display the local frontend address in the terminal.
 ## API Organization
 
 The FastAPI application is divided into feature-specific routers.
+
+not intended as a public internet API
 
 ### Wardrobe
 

@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 
@@ -6,6 +7,8 @@ from dotenv import load_dotenv
 
 from app.schemas.weather import WeatherConditions
 
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 API_KEY = os.getenv("WEATHER_API_KEY")
 TOKEN = os.getenv("IP_INFO_TOKEN")
@@ -13,6 +16,13 @@ TOKEN = os.getenv("IP_INFO_TOKEN")
 
 WEATHER_CACHE = {"data": None, "expires_at": 0}
 TOTAL_CACHE_TIME = 30 * 60  # 30 minutes
+
+
+def _require_secrets() -> None:
+    if not API_KEY:
+        raise ValueError("WEATHER_API_KEY is not configured")
+    if not TOKEN:
+        raise ValueError("IP_INFO_TOKEN is not configured")
 
 
 def get_location():
@@ -24,14 +34,18 @@ def get_location():
         or raises an exception on failure.
     """
     try:
-        response = requests.get(f"https://ipinfo.io/json?token={TOKEN}", timeout=5)
+        response = requests.get(
+            "https://ipinfo.io/json",
+            headers={"Authorization": f"Bearer {TOKEN}"},
+            timeout=5,
+        )
         response.raise_for_status()  # Raise an exception for bad status codes
         data = response.json()
         loc = data.get("loc")
         city = data.get("city")
 
         if not loc:
-            print("Failed to get location: 'loc' field missing from response")
+            logger.warning("Failed to get location: 'loc' field missing from response")
             raise ValueError(
                 "Failed to get location: 'loc' field missing from response"
             )
@@ -40,14 +54,14 @@ def get_location():
             lat, lon = map(float, loc.split(","))
             return lat, lon, city
         except (ValueError, AttributeError) as e:
-            print(f"Failed to parse location data '{loc}': {e}")
-            raise ValueError(f"Failed to parse location data '{loc}'") from e
+            logger.warning("Failed to parse location data: %s", type(e).__name__)
+            raise ValueError("Failed to parse location data")
     except requests.exceptions.RequestException as e:
-        print(f"Failed to get location (network error): {e}")
+        logger.warning("Failed to get location (network error): %s", type(e).__name__)
         raise
     except (KeyError, TypeError) as e:
-        print(f"Failed to get location (data error): {e}")
-        raise ValueError("Failed to get location (data error)") from e
+        logger.warning("Failed to get location (data error): %s", type(e).__name__)
+        raise ValueError("Failed to get location")
 
 
 def get_weather(lat, lon, city) -> WeatherConditions:
@@ -67,25 +81,29 @@ def get_weather(lat, lon, city) -> WeatherConditions:
         raise ValueError("Failed to get weather: Invalid coordinates")
 
     try:
-        url = (
-            f"https://api.openweathermap.org/data/2.5/weather?"
-            f"lat={lat}&lon={lon}&units=metric&appid={API_KEY}"
+        response = requests.get(
+            "https://api.openweathermap.org/data/2.5/weather",
+            params={"lat": lat, "lon": lon, "units": "metric", "appid": API_KEY},
+            timeout=5,
         )
-        response = requests.get(url, timeout=5)
         response.raise_for_status()  # Raise an exception for bad status codes
         data = response.json()
 
         # Validate response structure
         if "main" not in data or "temp" not in data["main"]:
-            print("Failed to get weather: Invalid response structure missing temp)")
-            raise ValueError("Invalid response structure missing temp")
+            logger.warning(
+                "Failed to get weather: Invalid response structure missing temp)"
+            )
+            raise ValueError("Invalid response structure missing temperature")
 
         if (
             "weather" not in data
             or not data["weather"]
             or "icon" not in data["weather"][0]
         ):
-            print("Failed to get weather: Invalid response structure missing icon")
+            logger.warning(
+                "Failed to get weather: Invalid response structure missing icon"
+            )
             raise ValueError("Invalid response structure missing icon")
 
         celsius = round(data["main"]["temp"])
@@ -101,14 +119,22 @@ def get_weather(lat, lon, city) -> WeatherConditions:
         )
         return weather_data
     except requests.exceptions.RequestException as e:
-        print(f"Failed to get weather (network error): {e}")
+        logger.warning("Failed to get weather (network error): %s", type(e).__name__)
         raise
     except (KeyError, TypeError, IndexError) as e:
-        print(f"Failed to get weather (data error): {e}")
-        raise ValueError("Failed to get weather (data error)") from e
+        logger.warning("Failed to get weather (data error): %s", type(e).__name__)
+        raise ValueError("Failed to get weather") from e
 
 
 def get_current_weather():
+    """
+    Retrieves the current weather data from the cache or API.
+
+    Returns:
+        WeatherConditions: WeatherConditions object
+        or raises an exception on failure
+    """
+    _require_secrets()
     now = time.time()
 
     # Check if the weather data is already in the cache
@@ -118,7 +144,8 @@ def get_current_weather():
     # Get the user's location
     lat, lon, city = get_location()
     if lat is None or lon is None:
-        raise ValueError("Failed to get location: Invalid coordinates")
+        logger.warning("Failed to get location: Invalid coordinates")
+        raise ValueError("Failed to get location.")
 
     # Get the weather data
     weather = get_weather(lat, lon, city)

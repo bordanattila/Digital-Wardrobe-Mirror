@@ -161,3 +161,47 @@ def test_get_current_weather_refetches_after_expiry():
 
     assert mock_loc.call_count == 2
     assert mock_weather.call_count == 2
+
+
+def test_get_current_weather_network_error():
+    with (
+        patch(
+            "app.services.weather_service.get_location",
+            side_effect=requests.exceptions.Timeout("timed out"),
+        ),
+        patch("app.services.weather_service.get_weather") as mock_weather,
+    ):
+        with pytest.raises(requests.exceptions.RequestException):
+            weather_service.get_current_weather()
+        mock_weather.assert_not_called()
+
+
+def test_get_current_weather_data_error():
+    with (
+        patch(
+            "app.services.weather_service.get_location",
+            return_value=(40.71, -74.0, "New York"),
+        ),
+        patch(
+            "app.services.weather_service.get_weather",
+            side_effect=ValueError("Invalid response structure missing temp"),
+        ),
+    ):
+        with pytest.raises(ValueError, match="temp"):
+            weather_service.get_current_weather()
+
+
+def test_get_current_weather_config_error(monkeypatch):
+    monkeypatch.setattr(weather_service, "API_KEY", None)
+    monkeypatch.setattr(weather_service, "TOKEN", "fake-token")
+
+    with pytest.raises(ValueError, match="WEATHER_API_KEY is not configured"):
+        weather_service.get_current_weather()
+
+
+def test_get_current_weather_config_error_missing_token(monkeypatch):
+    monkeypatch.setattr(weather_service, "API_KEY", "fake-key")
+    monkeypatch.setattr(weather_service, "TOKEN", None)
+
+    with pytest.raises(ValueError, match="IP_INFO_TOKEN is not configured"):
+        weather_service.get_current_weather()
