@@ -10,8 +10,10 @@ from app.services import weather_service
 
 
 @pytest.fixture(autouse=True)
-def clear_weather_cache():
-    """Isolate tests from the module-level weather cache."""
+def clear_weather_cache(monkeypatch):
+    """Isolate tests from the module-level weather cache and secrets."""
+    monkeypatch.setattr(weather_service, "API_KEY", "test-weather-key")
+    monkeypatch.setattr(weather_service, "TOKEN", "test-ipinfo-token")
     weather_service.WEATHER_CACHE["data"] = None
     weather_service.WEATHER_CACHE["expires_at"] = 0
     yield
