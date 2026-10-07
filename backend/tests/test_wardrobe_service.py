@@ -19,7 +19,8 @@ def test_list_clothing_items_maps_rows(db):
     assert len(items) == 1
     assert items[0].name == "Tee"
     assert items[0].color == "blue"
-    assert items[0].image_path == "/img/tee.png"
+    # Stored path is stripped to basename before leaving the service.
+    assert items[0].image_path == "tee.png"
 
 
 def test_get_one_clothing_item_by_id(db):
@@ -50,8 +51,10 @@ def test_create_item_success(db, image_dirs):
 
     assert item.id == 1
     assert item.name == "Test Shirt"
-    assert "processed" in item.image_path
-    assert image_dirs["processed"].exists()
+    assert item.image_path == Path(item.image_path).name
+    assert item.image_path.startswith("bg_removed_")
+    assert item.image_path.endswith(".png")
+    assert (image_dirs["processed"] / item.image_path).is_file()
     originals = list(image_dirs["original"].iterdir())
     assert len(originals) == 1
 
@@ -88,7 +91,8 @@ def test_create_rejects_oversized_file(db, image_dirs):
 
 
 def test_create_cleans_up_original_when_process_fails(db, image_dirs):
-    with pytest.raises(ValueError, match="not a valid image"):
+    # Corrupt bytes are rejected before write; no original should remain.
+    with pytest.raises(ValueError, match="Failed to open image"):
         wardrobe_service.create_item(
             db=db,
             name="Corrupt",
@@ -111,8 +115,8 @@ def test_update_item_by_id(db):
     assert updated.color == "green"
     assert updated.size == "L"
     assert updated.subcategory == "polo"
-    # Image path is metadata-only update — unchanged
-    assert updated.image_path == "/img/tee.png"
+    # Image path is metadata-only update — unchanged (basename exposed)
+    assert updated.image_path == "tee.png"
 
 
 def test_update_item_missing(db):
@@ -133,7 +137,7 @@ def test_remove_clothing_item_by_id_deletes_files(db, image_dirs):
         image_bytes=png,
     )
     original = list(image_dirs["original"].iterdir())[0]
-    processed = Path(item.image_path)
+    processed = image_dirs["processed"] / item.image_path
     assert original.exists()
     assert processed.exists()
 

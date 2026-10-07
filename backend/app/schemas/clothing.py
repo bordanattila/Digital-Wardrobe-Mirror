@@ -1,6 +1,4 @@
-from typing import Optional
-
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ClothingItem(BaseModel):
@@ -13,11 +11,11 @@ class ClothingItem(BaseModel):
     image_path: str
 
 
-class ClothingItemUpdate(BaseModel):
+class NewClothingItem(BaseModel):
     id: int
-    name: Optional[str] = None
-    color: Optional[str] = None
-    size: Optional[str] = None
-    category: Optional[str] = None
-    subcategory: Optional[str] = None
-    image_path: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=100)
+    color: str = Field(..., min_length=1, max_length=20)
+    size: str = Field(..., min_length=1, max_length=10)
+    category: str = Field(..., min_length=1, max_length=20)
+    subcategory: str = Field(..., min_length=1, max_length=50)
+    image_path: str

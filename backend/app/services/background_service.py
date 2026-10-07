@@ -7,11 +7,14 @@ Path checks, extension allowlisting, and size limits defend against
 path traversal and oversized or non-image uploads.
 """
 
+import logging
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
 
 from app.utils.colors import GREEN, RED, RESET
+
+logger = logging.getLogger(__name__)
 
 # backend/ — three levels up from app/services/this_file.py
 BASE_DIR = Path(__file__).parent.parent.parent
@@ -69,6 +72,9 @@ def process_image(image_path: Path) -> Path:
     if not image_path.is_file() or not is_path_inside_directory(
         image_path, ORIGINAL_IMAGES_DIR
     ):
+        logger.warning(
+            "Image path %s is not inside the original images directory", image_path
+        )
         raise ValueError(
             f"Image path {image_path} is not inside the original images directory"
         )
@@ -100,9 +106,11 @@ def process_image(image_path: Path) -> Path:
             background_removed = remove_background(image)
             background_removed.save(out_path)
     except UnidentifiedImageError as exc:
-        raise ValueError(f"Image {image_path} is not a valid image: {exc}")
+        logger.warning("Failed to open image: %s", type(exc).__name__)
+        raise ValueError("Failed to open image") from exc
     except OSError as exc:
-        raise ValueError(f"Error processing image {image_path}: {exc}")
+        logger.warning("Failed to process image: %s", type(exc).__name__)
+        raise ValueError("Failed to process image") from exc
 
     # Only this verified processed path is safe to store in the database later
     verified_image_path = str(out_path)
@@ -116,4 +124,5 @@ if __name__ == "__main__":
         try:
             process_image(file)
         except ValueError as exc:
-            print(f"{RED}Error processing image {file}: {exc}{RESET}")
+            logger.warning("Failed to process image: %s", type(exc).__name__)
+            print(f"{RED}Failed to process image {file}{RESET}")
