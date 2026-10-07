@@ -20,8 +20,12 @@ RULE: do not import FastAPI or raise HTTPException here.
       The router maps those to HTTP 400 (validation) or 404 (not found).
 """
 
+import logging
 import uuid
+from io import BytesIO
 from pathlib import Path
+
+from PIL import Image, UnidentifiedImageError
 
 from app.database import Database
 from app.schemas.clothing import ClothingItem
@@ -31,6 +35,9 @@ from app.services.background_service import (
     ORIGINAL_IMAGES_DIR,
     process_image,
 )
+from app.utils.helpers import processed_path_from_original, processed_path_from_stored
+
+logger = logging.getLogger(__name__)
 
 
 def _row_to_clothing_item(row) -> ClothingItem:
@@ -47,7 +54,7 @@ def _row_to_clothing_item(row) -> ClothingItem:
         size=row["item_size"],
         category=row["item_category"],
         subcategory=row["item_subcategory"],
-        image_path=row["item_image_path"],
+        image_path=Path(row["item_image_path"]).name,
     )
 
 
@@ -65,7 +72,8 @@ def get_one_clothing_item_by_id(db: Database, item_id: int) -> ClothingItem:
     """
     row = db.get_clothing_item_by_id(item_id)
     if row is None:
-        raise ValueError(f"Clothing item with ID {item_id} not found")
+        logger.warning("Clothing item not found: %s", item_id)
+        raise ValueError("Clothing item not found")
     return _row_to_clothing_item(row)
 
 
@@ -85,7 +93,8 @@ def update_item_by_id(
     """
     row = db.get_clothing_item_by_id(item_id)
     if row is None:
-        raise ValueError(f"Clothing item with ID {item_id} not found")
+        logger.warning("Clothing item not found: %s", item_id)
+        raise ValueError("Clothing item not found")
     db.update_clothing_item_by_id(
         item_id, item_name, item_color, item_size, item_category, item_subcategory
     )
@@ -117,12 +126,23 @@ def create_item(
     # Empty / missing filename -> "" which is not in ALLOWED_EXTENSIONS.
     suffix = Path(filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
+        logger.warning("Unsupported file type: %s", suffix)
         raise ValueError("Unsupported file type")
 
     # 2. Reject oversized uploads before we write anything
     # Protects disk and memory (especially on a Raspberry Pi).
     if len(image_bytes) > MAX_IMAGE_SIZE:
+        logger.warning("File too large: %s", len(image_bytes))
         raise ValueError("File too large")
+
+    # Validate image file
+    if suffix in ALLOWED_EXTENSIONS:
+        try:
+            with Image.open(BytesIO(image_bytes)) as image:
+                image.load()
+        except UnidentifiedImageError as exc:
+            logger.warning("Failed to open image: %s", type(exc).__name__)
+            raise ValueError("Failed to open image") from exc
 
     # 3. Save the raw upload under a unique name
     # uuid4() avoids collisions if two users upload "shirt.jpg".
@@ -135,6 +155,7 @@ def create_item(
     # We let that bubble up unchanged so the router can map it to HTTP 400.
     try:
         background_removed_path = process_image(saved_path)
+        stored_name = background_removed_path.name
 
         # 5. Persist metadata + processed image path
         db.add_clothing_item(
@@ -143,7 +164,7 @@ def create_item(
             size,
             category,
             subcategory,
-            str(background_removed_path),
+            stored_name,
         )
         # lastrowid is the auto-increment id SQLite assigned on that INSERT.
         item_id = db.cursor.lastrowid
@@ -156,12 +177,13 @@ def create_item(
             size=size,
             category=category,
             subcategory=subcategory,
-            image_path=str(background_removed_path),
+            image_path=stored_name,
         )
-    except Exception:
+    except ValueError as exc:
         # Service raised ValueError("File too large") etc. -> HTTP 400 for clients.
         saved_path.unlink(missing_ok=True)
-        raise
+        logger.warning("Failed to create clothing item: %s", type(exc).__name__)
+        raise ValueError("Failed to create clothing item") from exc
 
 
 def remove_clothing_item_by_id(db: Database, item_id: int) -> None:
@@ -175,14 +197,16 @@ def remove_clothing_item_by_id(db: Database, item_id: int) -> None:
     """
     row = db.get_clothing_item_by_id(item_id)
     if row is None:
-        raise ValueError(f"Clothing item with ID {item_id} not found")
+        logger.warning("Clothing item not found: %s", item_id)
+        raise ValueError("Clothing item not found")
     db.delete_clothing_item_by_id(item_id)
 
     # Delete processed image; derive original name from bg_removed_ prefix
-    processed_path = Path(row["item_image_path"])
+    stored_path = row["item_image_path"]
+    processed_path = processed_path_from_stored(stored_path)
     name = processed_path.name
     if name.startswith("bg_removed_"):
         original_name = name.removeprefix("bg_removed_")
-        original_path = ORIGINAL_IMAGES_DIR / original_name
+        original_path = processed_path_from_original(original_name)
         original_path.unlink(missing_ok=True)
     processed_path.unlink(missing_ok=True)

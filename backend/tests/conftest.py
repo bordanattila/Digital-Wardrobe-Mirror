@@ -25,11 +25,14 @@ def image_dirs(tmp_path, monkeypatch):
     original.mkdir()
     processed.mkdir()
 
+    # Patch every module that imported these Path constants by name.
     monkeypatch.setattr("app.services.background_service.ORIGINAL_IMAGES_DIR", original)
     monkeypatch.setattr(
         "app.services.background_service.BACKGROUND_REMOVED_IMAGES_DIR", processed
     )
     monkeypatch.setattr("app.services.wardrobe_service.ORIGINAL_IMAGES_DIR", original)
+    monkeypatch.setattr("app.utils.helpers.ORIGINAL_IMAGES_DIR", original)
+    monkeypatch.setattr("app.utils.helpers.BACKGROUND_REMOVED_IMAGES_DIR", processed)
 
     return {"original": original, "processed": processed}
 

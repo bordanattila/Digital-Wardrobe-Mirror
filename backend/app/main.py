@@ -2,18 +2,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.database import Database
 from app.routers import wardrobe as wardrobe_router
 from app.routers import weather as weather_router
-from app.utils.dependencies import DB_PATH
 
 
 # Create table if not exists
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db = Database(DB_PATH)
-    db.create_table()
-    db.close()
 
     yield
 

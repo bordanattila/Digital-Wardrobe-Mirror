@@ -70,13 +70,18 @@ def test_create_and_list_wardrobe_item(client, image_dirs):
     assert body["name"] == "Test Shirt"
     assert body["color"] == "red"
     assert body["id"] == 1
-    assert "processed" in body["image_path"]
+    # API returns basename only (no directory) so clients never see disk paths.
+    assert body["image_path"] == Path(body["image_path"]).name
+    assert body["image_path"].startswith("bg_removed_")
+    assert body["image_path"].endswith(".png")
+    assert (image_dirs["processed"] / body["image_path"]).is_file()
 
     listed = client.get("/api/wardrobe/")
     assert listed.status_code == 200
     items = listed.json()
     assert len(items) == 1
     assert items[0]["name"] == "Test Shirt"
+    assert items[0]["image_path"] == body["image_path"]
 
 
 def test_get_wardrobe_item_by_id(client):
@@ -126,14 +131,15 @@ def test_update_wardrobe_item_not_found(client):
 
 def test_delete_wardrobe_item(client, image_dirs):
     created = _create_item(client).json()
-    processed = created["image_path"]
+    processed = image_dirs["processed"] / created["image_path"]
+    assert processed.is_file()
     response = client.delete(f"/api/wardrobe/{created['id']}")
     assert response.status_code == 204
     assert response.content == b""
 
     assert client.get(f"/api/wardrobe/{created['id']}").status_code == 404
     assert list(image_dirs["original"].iterdir()) == []
-    assert not Path(processed).exists()
+    assert not processed.exists()
 
 
 def test_delete_wardrobe_item_not_found(client):
@@ -154,7 +160,7 @@ def test_create_rejects_bad_extension(client):
         files={"image": ("notes.txt", b"hello", "text/plain")},
     )
     assert response.status_code == 400
-    assert "Unsupported file type" in response.json()["detail"]
+    assert response.json()["detail"] == "Failed to create clothing item"
 
 
 def test_create_rejects_corrupt_image(client, image_dirs):

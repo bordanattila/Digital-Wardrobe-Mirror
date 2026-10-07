@@ -52,7 +52,7 @@ def test_process_image_rejects_non_image(image_dirs):
     fake = image_dirs["original"] / "not-an-image.png"
     fake.write_bytes(b"this is not a png")
 
-    with pytest.raises(ValueError, match="not a valid image"):
+    with pytest.raises(ValueError, match="Failed to open image"):
         process_image(fake)
 
 
