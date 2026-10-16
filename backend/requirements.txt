@@ -1,5 +1,6 @@
 Pillow == 12.3.0
-rembg == 2.0.85
+# [cpu] pulls onnxruntime so `from rembg import remove` works in CI / CPU-only hosts
+rembg[cpu] == 2.0.85
 # Backend API
 fastapi == 0.115.9
 uvicorn == 0.34.0
