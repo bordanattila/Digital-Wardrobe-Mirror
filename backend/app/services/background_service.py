@@ -10,7 +10,7 @@ path traversal and oversized or non-image uploads.
 import logging
 from pathlib import Path
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.utils.colors import RED, RESET
 
@@ -103,6 +103,10 @@ def process_image(image_path: Path) -> Path:
         with Image.open(image_path) as image:
             image.load()  # force decode now so corrupt/non-images fail here
             print(f"Processing image: {image_path.name}")
+
+            # upright pixels; orient image correctly
+            image = ImageOps.exif_transpose(image)
+
             background_removed = remove_background(image)
             background_removed.save(out_path)
     except UnidentifiedImageError as exc:

@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { sampleTop } from '../test/fixtures'
@@ -10,6 +11,14 @@ vi.mock('../api', () => ({
 }))
 
 import { createClothingItem } from '../api'
+
+function renderUpload() {
+  return render(
+    <MemoryRouter>
+      <UploadPage />
+    </MemoryRouter>,
+  )
+}
 
 function fileInput() {
   const input = document.querySelector(
@@ -23,8 +32,11 @@ async function fillForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByPlaceholderText('Name'), 'Summer Tee')
   await user.type(screen.getByPlaceholderText('Color'), 'white')
   await user.type(screen.getByPlaceholderText('Size'), 'M')
-  await user.type(screen.getByPlaceholderText('Category'), 'top')
-  await user.type(screen.getByPlaceholderText('Subcategory'), 't-shirt')
+  await user.selectOptions(screen.getByLabelText('Category'), 'top')
+  await user.type(
+    screen.getByPlaceholderText(/e\.g\. t-shirt/),
+    't-shirt',
+  )
   await user.upload(
     fileInput(),
     new File(['fake-image'], 'tee.png', { type: 'image/png' }),
@@ -41,10 +53,13 @@ describe('UploadPage', () => {
     vi.mocked(createClothingItem).mockResolvedValue(sampleTop)
     const onCreated = vi.fn()
 
-    const { container } = render(<UploadPage onCreated={onCreated} />)
+    const { container } = render(
+      <MemoryRouter>
+        <UploadPage onCreated={onCreated} />
+      </MemoryRouter>,
+    )
     await fillForm(user)
 
-    // Bypass native HTML5 file required checks in jsdom; React state already has the file.
     const form = container.querySelector('form')
     if (!form) throw new Error('form not found')
     form.noValidate = true
@@ -71,7 +86,7 @@ describe('UploadPage', () => {
     const user = userEvent.setup()
     vi.mocked(createClothingItem).mockRejectedValue(new Error('boom'))
 
-    const { container } = render(<UploadPage />)
+    const { container } = renderUpload()
     await fillForm(user)
     const form = container.querySelector('form')
     if (!form) throw new Error('form not found')
@@ -84,13 +99,16 @@ describe('UploadPage', () => {
 
   it('asks for an image when none is chosen', async () => {
     const user = userEvent.setup()
-    const { container } = render(<UploadPage />)
+    const { container } = renderUpload()
 
     await user.type(screen.getByPlaceholderText('Name'), 'Summer Tee')
     await user.type(screen.getByPlaceholderText('Color'), 'white')
     await user.type(screen.getByPlaceholderText('Size'), 'M')
-    await user.type(screen.getByPlaceholderText('Category'), 'top')
-    await user.type(screen.getByPlaceholderText('Subcategory'), 't-shirt')
+    await user.selectOptions(screen.getByLabelText('Category'), 'top')
+    await user.type(
+      screen.getByPlaceholderText(/e\.g\. t-shirt/),
+      't-shirt',
+    )
 
     const form = container.querySelector('form')
     if (!form) throw new Error('form not found')

@@ -33,7 +33,7 @@ def client(tmp_path, image_dirs):
 def _create_item(client, name="Test Shirt"):
     png = make_png_bytes(color=(0, 0, 0), accent=(200, 50, 50))
     return client.post(
-        "/api/wardrobe/",
+        "/api/wardrobe/upload",
         data={
             "name": name,
             "color": "red",
@@ -149,7 +149,7 @@ def test_delete_wardrobe_item_not_found(client):
 
 def test_create_rejects_bad_extension(client):
     response = client.post(
-        "/api/wardrobe/",
+        "/api/wardrobe/upload",
         data={
             "name": "Bad",
             "color": "red",
@@ -165,7 +165,7 @@ def test_create_rejects_bad_extension(client):
 
 def test_create_rejects_corrupt_image(client, image_dirs):
     response = client.post(
-        "/api/wardrobe/",
+        "/api/wardrobe/upload",
         data={
             "name": "Corrupt",
             "color": "red",
