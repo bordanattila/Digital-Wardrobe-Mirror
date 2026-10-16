@@ -12,7 +12,7 @@ from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
 
-from app.utils.colors import GREEN, RED, RESET
+from app.utils.colors import RED, RESET
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,8 @@ def process_image(image_path: Path) -> Path:
 
     # Only this verified processed path is safe to store in the database later
     verified_image_path = str(out_path)
-    print(f"{GREEN}Processed: {image_path.name} -> {verified_image_path}{RESET}")
+    logger.info(f"Processed: {image_path.name} -> {verified_image_path}")
+    print(f"Processed: {image_path.name}")
     return Path(verified_image_path)
 
 

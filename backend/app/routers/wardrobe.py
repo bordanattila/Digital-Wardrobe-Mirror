@@ -15,12 +15,14 @@ app.services.wardrobe_service.
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from app.database import Database
 from app.schemas.clothing import ClothingItem, NewClothingItem
 from app.services import wardrobe_service
 from app.services.background_service import MAX_IMAGE_SIZE
 from app.utils.dependencies import get_db
+from app.utils.helpers import get_item_image_path
 from app.utils.rate_limiter import rate_limit
 
 router = APIRouter()
@@ -73,7 +75,7 @@ async def update_clothing_item_by_id(
         raise HTTPException(status_code=404, detail="Clothing item not found") from exc
 
 
-@router.post("/", response_model=NewClothingItem)
+@router.post("/upload", response_model=NewClothingItem)
 async def create_clothing_item(
     name: str = Form(..., min_length=1, max_length=100),
     color: str = Form(..., min_length=1, max_length=20),
@@ -84,7 +86,7 @@ async def create_clothing_item(
     db: Database = Depends(get_db),
     _rate_limit: None = Depends(rate_limit),
 ):
-    """POST /wardrobe/ — create an item from multipart form + image file.
+    """POST /wardrobe/upload — create an item from multipart form + image file.
 
     UploadFile is a FastAPI/Starlette type, so we read it HERE and pass
     plain bytes + filename into the service. That keeps the service free
@@ -130,3 +132,16 @@ async def delete_clothing_item_by_id(
     except ValueError as exc:
         logger.warning("Clothing item not found: %s", item_id)
         raise HTTPException(status_code=404, detail="Clothing item not found") from exc
+
+
+@router.get("/{item_id}/image")
+async def get_clothing_item_image(
+    item_id: int,
+    db: Database = Depends(get_db),
+):
+    """GET /wardrobe/{item_id}/image — get a clothing item image by ID."""
+    try:
+        path = get_item_image_path(db, item_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Image not found") from exc
+    return FileResponse(path)
