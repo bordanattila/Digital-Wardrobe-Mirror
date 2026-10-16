@@ -8,6 +8,7 @@ import { sampleSuggestion } from './test/fixtures'
 vi.mock('./api', () => ({
   getOutfitSuggestion: vi.fn(),
   createClothingItem: vi.fn(),
+  clothingImageUrl: (id: number) => `/api/wardrobe/${id}/image`,
 }))
 
 import { getOutfitSuggestion } from './api'
@@ -23,8 +24,9 @@ describe('App routes', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Digital Wardrobe Mirror')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Weather' })).toBeInTheDocument()
     })
+    expect(screen.getByText('Summer Tee')).toBeInTheDocument()
   })
 
   it('renders UploadPage on /upload', () => {

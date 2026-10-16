@@ -67,6 +67,15 @@ export async function createClothingItem(form: FormData): Promise<ClothingItem> 
   return response.json() as Promise<ClothingItem>
 }
 
+export async function deleteClothingItem(itemId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/wardrobe/${itemId}`, {
+    method: 'DELETE'
+  })
+  if (!response.ok) {
+    throw new Error(`API /api/wardrobe/${itemId} failed: ${response.status}`)
+  }
+}
+
 /** URL for <img src> */
 export function clothingImageUrl(itemId: number): string {
   return `${API_BASE}/api/wardrobe/${itemId}/image`
