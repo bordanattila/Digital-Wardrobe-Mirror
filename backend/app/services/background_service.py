@@ -8,9 +8,11 @@ path traversal and oversized or non-image uploads.
 """
 
 import logging
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+from rembg import remove
 
 from app.utils.colors import RED, RESET
 
@@ -43,24 +45,22 @@ def is_path_inside_directory(path: Path, directory: Path) -> bool:
         return False
 
 
-def remove_background(image):
-    """Replace pure-black pixels with white (simple prototype background cut).
+def remove_background(image: Image.Image) -> Image.Image:
+    """Remove the background of an image using rembg.
 
     Args:
-        image: A PIL Image. Converted to RGB before processing.
+        image (Image.Image): The image to remove the background from.
 
     Returns:
-        The modified RGB image (black -> white).
+        Image.Image: The image with the background removed.
     """
-    image = image.convert("RGB")
-    width, height = image.size
-    pixels = image.load()
-    for y in range(height):
-        for x in range(width):
-            pixel = pixels[x, y]
-            if pixel == (0, 0, 0):
-                pixels[x, y] = (255, 255, 255)
-    return image
+    # rembg wants bytes in / bytes out
+    buf = BytesIO()
+    # save a lossless intermediate; RGB or RGBA both fine as input
+    rgb = image.convert("RGB")
+    rgb.save(buf, format="PNG")
+    cutout_bytes = remove(buf.getvalue())  # PNG with alpha
+    return Image.open(BytesIO(cutout_bytes)).convert("RGBA")
 
 
 def process_image(image_path: Path) -> Path:
@@ -88,7 +88,7 @@ def process_image(image_path: Path) -> Path:
     safe_stem = (
         "".join(c for c in image_path.stem if c.isalnum() or c in "-_") or "item"
     )
-    out_name = f"bg_removed_{safe_stem}{image_path.suffix.lower()}"
+    out_name = f"bg_removed_{safe_stem}.png"
     out_path = (BACKGROUND_REMOVED_IMAGES_DIR / out_name).resolve()
 
     # Final confinement check on the destination we are about to write
@@ -107,8 +107,11 @@ def process_image(image_path: Path) -> Path:
             # upright pixels; orient image correctly
             image = ImageOps.exif_transpose(image)
 
+            if image.width > image.height:
+                image = image.rotate(-90, expand=True)  # clockwise → portrait
+
             background_removed = remove_background(image)
-            background_removed.save(out_path)
+            background_removed.save(out_path, format="PNG")
     except UnidentifiedImageError as exc:
         logger.warning("Failed to open image: %s", type(exc).__name__)
         raise ValueError("Failed to open image") from exc
