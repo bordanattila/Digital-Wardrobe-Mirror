@@ -1,0 +1,93 @@
+.mirror-page {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 50 / 50 */
+    height: 100vh;
+    width: 100%;
+    margin: 0;
+    background: #0b0d12; /* dark so glass panels read like the mockup */
+    color: #f5f5f5;
+    font-family: system-ui, sans-serif;
+  }
+  
+  .mirror-reflection {
+    /* intentionally empty — physical mirror shows through / behind */
+    min-height: 0;
+  }
+  
+  .mirror-ui {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  
+  .mirror-panel {
+    background: rgba(30, 32, 40, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1rem;
+    padding: 1rem 1.25rem;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  
+  .mirror-clock {
+    font-size: 3rem;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+  
+  .mirror-date {
+    opacity: 0.85;
+    margin-top: 0.25rem;
+  }
+  
+  .outfit-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  .outfit-card {
+    position: relative;
+    isolation: isolate;
+    background: rgba(20, 22, 28, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    width: 140px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  /* Soft blue ring + image-tinted bloom (blurred inherit trick) */
+  .outfit-card--selected {
+    border: 2px solid #3b82f6;
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
+  }
+
+  .outfit-card--selected::before {
+    content: '';
+    position: absolute;
+    inset: 20%;
+    z-index: -1;
+    background: var(--outfit-card-image) center / cover;
+    filter: blur(40px) saturate(1.8);
+    scale: 1.1;
+    opacity: 0.9;
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  
+  .outfit-card img {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 120px;
+    object-fit: contain;
+    display: block;
+  }
+  
