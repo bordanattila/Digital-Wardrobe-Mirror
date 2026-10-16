@@ -357,7 +357,7 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-`requirements.txt` includes **Pillow** and **rembg**. The first rembg run may download an ONNX model (one-time). On machines without a suitable GPU, the CPU build of onnxruntime is enough for local development.
+`requirements.txt` includes **Pillow** and **`rembg[cpu]`** (installs `onnxruntime`). The first rembg run may download an ONNX model (one-time). For NVIDIA GPUs you can instead use `pip install "rembg[gpu]"`.
 
 Copy the example environment file and add your weather API secrets:
 
@@ -420,7 +420,7 @@ From `backend/` with the virtual environment active:
 pytest
 ```
 
-Background-removal tests **mock rembg** so CI does not download models or run ONNX.
+Background-removal tests **mock** `rembg.remove` so CI does not download models or run inference. `onnxruntime` must still be installed so importing `rembg` succeeds during collection.
 
 ### Frontend
 
