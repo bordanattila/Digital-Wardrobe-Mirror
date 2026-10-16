@@ -15,20 +15,20 @@ The project is currently being developed as a **desktop prototype** before any R
 
 Choosing an outfit every morning can take more time than it should. Digital Wardrobe Mirror is designed to simplify that process by combining a personal digital wardrobe with weather-aware outfit recommendations.
 
-Users can upload pictures of their clothing, remove the image backgrounds, organize the items in a virtual wardrobe, and receive outfit suggestions appropriate for the day's weather.
+Users can upload pictures of their clothing (phone-oriented upload page), remove image backgrounds to transparent PNGs, browse the wardrobe, and receive outfit suggestions appropriate for the day's weather on a mirror-style dashboard.
 
 The project follows a simple pipeline:
 
 ```text
 Clothing Photos
       ↓
-Background Removal
+Background Removal (rembg → PNG with alpha)
       ↓
-Digital Wardrobe
+Digital Wardrobe (SQLite + processed images)
       ↓
 Weather Data
       ↓
-Outfit Selection
+Outfit Selection (deterministic rules)
       ↓
 Browser / Smart Mirror Interface
 ```
@@ -44,14 +44,14 @@ The first version is being developed entirely on a normal development machine.
 The desktop prototype includes:
 
 * FastAPI backend
-* React/Vite frontend
-* SQLite database
-* Wardrobe image uploads
-* Background removal
-* Clothing metadata
-* Weather integration
-* Weather-aware outfit recommendations
-* Browser-based user interface
+* React + TypeScript / Vite frontend (`react-router`)
+* SQLite database + Alembic migrations
+* Wardrobe image uploads (`POST /api/wardrobe/upload`)
+* Background removal via **rembg** (transparent PNG output)
+* Clothing metadata (name, color, size, category, subcategory)
+* Weather integration (OpenWeather + ipinfo for location)
+* Weather-aware outfit suggestions (`GET /api/outfits/suggest`)
+* Mirror UI (`/`), phone upload UI (`/upload`), full wardrobe UI (`/full-wardrobe`)
 
 No Raspberry Pi hardware is required during this phase.
 
@@ -65,67 +65,63 @@ Once the software is stable, the application can be migrated to the Raspberry Pi
 
 Users can add clothing items to their personal wardrobe.
 
-Each item can eventually contain information such as:
+Each item currently stores:
 
-* Clothing type
-* Category
+* Name
 * Color
-* Season
-* Temperature suitability
-* Image path
-* Additional tags
+* Size
+* Category (e.g. `top`, `bottom`, `jacket`, `shoes`, `accessory`)
+* Subcategory (e.g. `t-shirt`, `jeans`, `hoodie` — used by the outfit filter)
+* Processed image filename
 
-Example categories may include:
-
-```text
-Tops
-Bottoms
-Shoes
-Jackets
-Sweaters
-Accessories
-```
+Season tags, temperature suitability fields, and richer tagging are planned later.
 
 ---
 
 ### Wardrobe Image Upload
 
-Users can upload photographs of clothing through the application.
+Users upload photographs through the **`/upload`** page (intended for phone use). The mirror home screen does not host the upload form.
 
-Uploaded images are stored with the wardrobe and can be displayed visually when browsing clothing or viewing outfit recommendations.
+Uploaded originals are stored under `backend/wardrobe_images/original/`. After processing, the API serves cutouts from `backend/wardrobe_images/processed/`. The database stores the processed **filename** only (not an absolute filesystem path).
 
 ---
 
 ### Background Removal
 
-Clothing photos can have their backgrounds removed so that wardrobe items appear cleanly in the interface.
+Clothing photos are processed with **rembg** so wardrobe items appear as transparent PNGs against the dark mirror UI.
 
-This allows clothing images to be displayed more naturally against the mirror or application background.
+Processing also:
+
+* Applies EXIF orientation (`ImageOps.exif_transpose`)
+* Forces portrait when the frame is still landscape (common for phone shots whose EXIF was stripped)
+* Always writes **`.png`** (JPEG cannot keep transparency)
 
 ```text
 Original Photo
       ↓
-Background Removal
+Orient + optional portrait fix
       ↓
-Transparent Clothing Image
+rembg cutout
       ↓
-Digital Wardrobe
+Transparent PNG
+      ↓
+Digital Wardrobe / Mirror cards
 ```
 
 ---
 
 ### Weather Integration
 
-The backend retrieves current weather information that can be used by the outfit recommendation system.
+The backend retrieves **current** weather used by the outfit suggestion flow and mirror UI.
 
-Relevant weather information may include:
+Fields available today:
 
-* Temperature
-* Feels-like temperature
-* Weather conditions
-* Precipitation
-* Wind
-* Daily forecast
+* Temperature (°C and °F)
+* Conditions description
+* Weather icon code
+* City (from IP geolocation of the **server** egress IP)
+
+Feels-like temperature, precipitation chance, wind, and multi-day forecast are not exposed yet.
 
 ---
 
@@ -133,48 +129,29 @@ Relevant weather information may include:
 
 Outfit recommendations are split into two layers.
 
-**Deterministic (on-device):** weather, tags, and hard constraints are handled by the local outfit algorithm — no LLM required. Example: *47°F and raining → eliminate shorts, sandals, and light jackets; keep cool-weather and rain-compatible candidates.*
+**Deterministic (on-device, implemented):** weather and wardrobe subcategory/category allowlists filter candidates — no LLM required. Example: at or above 70°F prefer warm-weather pieces (`t-shirt`, `shorts`, …); below that prefer cool-weather pieces (`hoodie`, `jeans`, …). The suggest API returns matching tops, bottoms, and the current weather payload.
 
 ```text
 Current Weather
       ↓
-Determine Clothing Requirements
+Choose warm- vs cool-weather allowlists
       ↓
-Filter Wardrobe (rules / tags)
+Filter wardrobe items
       ↓
-Select Compatible Items
+Return suggested tops + bottoms
       ↓
-Build Outfit
-      ↓
-Display Recommendation
+Mirror UI
 ```
 
-For example, colder weather may prioritize long pants, sweaters, jackets, and closed shoes; warmer weather may prioritize T-shirts, shorts, and lightweight clothing.
+**Reasoning (optional LLM, not implemented yet):** higher-level requests — occasion, style relative to recent outfits, “not overdressed” — will go to a local or cloud reasoning model with a small structured context payload. Hosting (home PC via LM Studio / Ollama vs cloud) is still undecided.
 
-**Reasoning (optional LLM):** higher-level requests — occasion, style relative to recent outfits, “not overdressed” — go to a local or cloud reasoning model. The Pi (or desktop prototype) builds a small structured context and sends that payload, for example:
+---
 
-```json
-{
-  "weather": {
-    "temperature": 47,
-    "condition": "rain"
-  },
-  "occasion": "casual dinner",
-  "available_clothing": [
-    "dark jeans",
-    "navy chinos",
-    "white oxford",
-    "gray sweater",
-    "brown boots"
-  ],
-  "recently_worn": [
-    "dark jeans",
-    "black hoodie"
-  ]
-}
-```
+### UI surfaces
 
-Whether the reasoning model runs on a home PC (LM Studio / Ollama) or in the cloud (OpenAI / etc.) is still undecided.
+* **`/` (mirror)** — large-type dashboard for a display behind a two-way mirror (not touch-first). Side panels for clock, weather, and outfit suggestions; center left clear for reflection. Voice can later call the same suggest API.
+* **`/upload`** — mobile-friendly clothing form + photo capture/upload.
+* **`/full-wardrobe`** — browse inventory and delete items.
 
 ---
 
@@ -188,36 +165,38 @@ Whether the reasoning model runs on a home PC (LM Studio / Ollama) or in the clo
 * Alembic (schema migrations)
 * SQLAlchemy (models for Alembic; CRUD still uses sqlite3)
 * Uvicorn
+* Pillow
+* rembg (background removal)
 
 The backend handles:
 
-* Wardrobe data
-* Image processing
+* Wardrobe CRUD and image serving
+* Image processing (orient, rembg, PNG save)
 * Weather data
-* Deterministic outfit recommendation logic
-* Optional structured reasoning requests to an LLM
+* Deterministic outfit suggestion logic
 * API endpoints
 
 ### Frontend
 
-* React
+* React 19
+* TypeScript / TSX
 * Vite
-* JavaScript / JSX
+* react-router-dom
 
-The frontend provides the visual interface for:
+The frontend provides:
 
-* Uploading clothing
-* Browsing the wardrobe
-* Viewing weather information
-* Displaying outfit recommendations
+* Mirror dashboard
+* Phone upload form
+* Full wardrobe browser
+* Dev proxy from Vite (`/api`, `/health`) → FastAPI on port 8000
 
 ### Database
 
 SQLite is used during the desktop prototype phase (`digital_wardrobe_mirror.db` in `backend/`).
 
-Schema changes are managed with **Alembic**. The app no longer creates tables on startup — run migrations before starting the API (see [Getting Started](#getting-started)).
+Schema changes are managed with **Alembic**. The app does not create tables on startup — run migrations before starting the API (see [Getting Started](#getting-started)).
 
-The `ClothingItems` table stores wardrobe metadata. Image files live under `backend/wardrobe_images/`; the database stores the processed **filename** only (not an absolute filesystem path).
+The `ClothingItem` table stores wardrobe metadata. Keep the SQLAlchemy model `__tablename__` in sync with the table name used in `database.py` (`ClothingItem`).
 
 ---
 
@@ -229,7 +208,7 @@ DigitalWardrobeMirror/
 ├── .github/
 │   └── workflows/
 │       ├── ruff.yml
-│       └── test.yml
+│       └── test.yml            # backend pytest + frontend vitest
 │
 ├── backend/
 │   ├── alembic.ini
@@ -243,8 +222,13 @@ DigitalWardrobeMirror/
 │   │   ├── schemas/
 │   │   ├── routers/
 │   │   │   ├── wardrobe.py
-│   │   │   └── weather.py
+│   │   │   ├── weather.py
+│   │   │   └── outfits.py
 │   │   ├── services/
+│   │   │   ├── background_service.py
+│   │   │   ├── wardrobe_service.py
+│   │   │   ├── weather_service.py
+│   │   │   └── outfit_service.py
 │   │   └── utils/
 │   ├── tests/
 │   ├── wardrobe_images/
@@ -252,15 +236,18 @@ DigitalWardrobeMirror/
 │   │   └── processed/
 │   ├── .env.example
 │   ├── requirements.txt
+│   ├── requirements-dev.txt
 │   └── digital_wardrobe_mirror.db   # created by Alembic (gitignored)
 │
 ├── frontend/
+│   ├── src/
+│   │   ├── pages/             # mirror, upload, full_wardrobe
+│   │   ├── api.ts
+│   │   └── App.tsx            # routes: /, /upload, /full-wardrobe
 │   └── ...
 │
 └── README.md
 ```
-
-As development continues, additional services, models, schemas, components, and utilities can be added without changing the overall architecture.
 
 ---
 
@@ -282,7 +269,7 @@ Local vs cloud hosting for that reasoning model is still an open decision.
 │  Weather service                             │
 │  Outfit algorithm                            │
 │  Camera / sensors                            │
-│  Background removal                          │
+│  Background removal (rembg)                  │
 │  Voice input/output                          │
 │                                              │
 │          ↓ reasoning request                 │
@@ -316,10 +303,10 @@ During Phase 1, the same software runs as a **desktop prototype** (React/Vite UI
         ▼             ▼
    SQLite DB      Services
                   │
-                  ├─ Background Removal
+                  ├─ Background Removal (rembg)
                   ├─ Weather
                   ├─ Outfit Selection (deterministic)
-                  └─ Reasoning request (optional LLM)
+                  └─ Reasoning request (optional LLM, later)
 ```
 
 ---
@@ -329,9 +316,11 @@ During Phase 1, the same software runs as a **desktop prototype** (React/Vite UI
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
-cd DigitalWardrobeMirror
+git clone https://github.com/bordanattila/Digital-Wardrobe-Mirror.git
+cd Digital-Wardrobe-Mirror
 ```
+
+(If your local folder is named `DigitalWardrobeMirror`, `cd` into that instead.)
 
 ---
 
@@ -368,6 +357,8 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
+`requirements.txt` includes **Pillow** and **rembg**. The first rembg run may download an ONNX model (one-time). On machines without a suitable GPU, the CPU build of onnxruntime is enough for local development.
+
 Copy the example environment file and add your weather API secrets:
 
 ```bash
@@ -381,7 +372,7 @@ Apply database migrations (required before the first API start, and after pullin
 alembic upgrade head
 ```
 
-This creates `digital_wardrobe_mirror.db` and the `ClothingItems` table if needed. Always run Alembic commands from the `backend/` directory so the SQLite path in `alembic.ini` resolves correctly.
+This creates `digital_wardrobe_mirror.db` and the `ClothingItem` table if needed. Always run Alembic commands from the `backend/` directory so the SQLite path in `alembic.ini` resolves correctly.
 
 Useful Alembic commands:
 
@@ -392,7 +383,7 @@ alembic revision --autogenerate -m "describe change"   # after editing app/model
 alembic upgrade head     # apply pending migrations
 ```
 
-Review autogenerated revisions before applying them. Keep the SQLAlchemy model `__tablename__` in sync with the table name used in `database.py` (`ClothingItems`).
+Review autogenerated revisions before applying them.
 
 Start the FastAPI development server:
 
@@ -407,7 +398,7 @@ The API will normally be available at:
 http://127.0.0.1:8000
 ```
 
-FastAPI interactive API documentation will normally be available at:
+FastAPI interactive API documentation:
 
 ```text
 http://127.0.0.1:8000/docs
@@ -421,13 +412,27 @@ http://127.0.0.1:8000/docs
 
 ## Testing
 
-Backend tests use **pytest**. From `backend/` with the virtual environment active:
+### Backend
+
+From `backend/` with the virtual environment active:
 
 ```bash
 pytest
 ```
 
-GitHub Actions runs the same suite on every push and pull request to `main` (see the **Tests** badge at the top of this README). Lint and formatting are checked separately by the **Ruff** workflow.
+Background-removal tests **mock rembg** so CI does not download models or run ONNX.
+
+### Frontend
+
+From `frontend/`:
+
+```bash
+npm test
+```
+
+### CI
+
+GitHub Actions runs **pytest** and **Vitest** on every push and pull request to `main`/`master` (see the **Tests** badge). Lint and formatting are checked separately by the **Ruff** workflow.
 
 ---
 
@@ -451,15 +456,21 @@ Start the Vite development server:
 npm run dev
 ```
 
-Vite will display the local frontend address in the terminal.
+Vite prints the local URL (typically `http://127.0.0.1:5173`). In development, leave `VITE_API_BASE_URL` empty so the Vite proxy forwards `/api` and `/health` to FastAPI on port 8000.
+
+Routes:
+
+| Path | Page |
+|------|------|
+| `/` | Mirror dashboard |
+| `/upload` | Add clothing (phone) |
+| `/full-wardrobe` | Full inventory |
 
 ---
 
 ## API Organization
 
-The FastAPI application is divided into feature-specific routers.
-
-not intended as a public internet API
+The FastAPI application is divided into feature-specific routers. It is intended for localhost / home LAN use during the prototype — not as a public internet API.
 
 ### Wardrobe
 
@@ -467,13 +478,16 @@ not intended as a public internet API
 backend/app/routers/wardrobe.py
 ```
 
-Responsible for operations such as:
+Prefix: `/api/wardrobe`
 
-* Adding clothing
-* Retrieving wardrobe items
-* Updating clothing
-* Removing clothing
-* Handling wardrobe images
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/` | List items |
+| `GET` | `/{id}` | Get one item |
+| `PUT` | `/{id}` | Update metadata |
+| `DELETE` | `/{id}` | Delete item (+ processed image cleanup) |
+| `POST` | `/upload` | Create item from multipart form + image |
+| `GET` | `/{id}/image` | Serve processed image file |
 
 ### Weather
 
@@ -481,7 +495,7 @@ Responsible for operations such as:
 backend/app/routers/weather.py
 ```
 
-Responsible for retrieving and exposing weather information used by the application.
+Prefix: `/api/weather` — current conditions for the server location.
 
 ### Outfits
 
@@ -489,7 +503,13 @@ Responsible for retrieving and exposing weather information used by the applicat
 backend/app/routers/outfits.py
 ```
 
-Responsible for generating outfit recommendations: local rule-based selection from wardrobe and weather, plus optional structured reasoning requests to a local or cloud LLM.
+Prefix: `/api/outfits`
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/suggest` | Weather + wardrobe → suggested tops/bottoms |
+
+Also: `GET /health` and `GET /` on the app root.
 
 ---
 
@@ -503,10 +523,10 @@ Build and validate the complete software workflow.
 FastAPI
 SQLite
 Wardrobe Uploader
-Background Removal
+Background Removal (rembg)
 Weather
 Outfit Algorithm
-Browser UI
+Browser UI (mirror / upload / wardrobe)
 ```
 
 ### Phase 2 — Improve Outfit Intelligence
@@ -517,35 +537,18 @@ Separately, add an optional **reasoning path**: build structured context from wa
 
 ### Phase 3 — Smart Mirror Interface
 
-Create a simplified full-screen interface designed specifically for mirror use.
-
-Potential information displayed:
-
-```text
-Good Morning
-
-72°F
-Partly Cloudy
-
-Today's Outfit
-
-[ Shirt ]
-[ Pants ]
-[ Shoes ]
-
-Today's Forecast
-```
+Create a simplified full-screen interface designed specifically for mirror use (voice-first interaction, center clear for reflection, glassmorphism polish).
 
 ### Phase 4 — Raspberry Pi Deployment
 
-Move the deterministic stack onto a Raspberry Pi 5 behind a two-way mirror. The Pi runs UI, API, database, weather, outfit algorithm, and related local services; reasoning requests (if enabled) go out to whichever model host is chosen.
+Move the deterministic stack onto a Raspberry Pi 5 behind a two-way mirror. Prefer **systemd** + journald logging for headless operation. The Pi runs UI, API, database, weather, outfit algorithm, and related local services; reasoning requests (if enabled) go out to whichever model host is chosen.
 
 ```text
 Raspberry Pi 5
      │
      ├── React / Mirror UI
      ├── FastAPI
-     ├── SQLite wardrobe.db
+     ├── SQLite digital_wardrobe_mirror.db
      ├── Weather + outfit algorithm
      ├── Camera / sensors, background removal, voice (as added)
      │
@@ -570,6 +573,7 @@ Possible future additions include:
 * Automatic wardrobe categorization / clothing recognition
 * Personalized recommendation learning
 * Morning brief integration
+* Image serving polish (`image_url` on DTOs, `Cache-Control`, thumbnails)
 
 ---
 
@@ -594,7 +598,7 @@ The project is intentionally built incrementally so software can be validated on
 
 **Current stage:** Phase 1 — Desktop Prototype
 
-CI: [Tests](https://github.com/bordanattila/DigitalWardrobeMirror/actions/workflows/test.yml) · [Ruff](https://github.com/bordanattila/DigitalWardrobeMirror/actions/workflows/ruff.yml)
+CI: [Tests](https://github.com/bordanattila/Digital-Wardrobe-Mirror/actions/workflows/test.yml) · [Ruff](https://github.com/bordanattila/Digital-Wardrobe-Mirror/actions/workflows/ruff.yml)
 
 The project is under active development. Features, architecture, and documentation may change as the prototype evolves.
 

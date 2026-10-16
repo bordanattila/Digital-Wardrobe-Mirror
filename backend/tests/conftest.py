@@ -1,11 +1,25 @@
 """Shared pytest fixtures for the backend test suite."""
 
 import io
+from io import BytesIO
 
 import pytest
 from PIL import Image
 
 from app.database import Database
+
+
+@pytest.fixture(autouse=True)
+def mock_rembg_remove(monkeypatch):
+    """Avoid real rembg/ONNX in CI — convert input bytes to RGBA PNG."""
+
+    def fake_remove(data: bytes) -> bytes:
+        with Image.open(BytesIO(data)) as im:
+            buf = BytesIO()
+            im.convert("RGBA").save(buf, format="PNG")
+            return buf.getvalue()
+
+    monkeypatch.setattr("app.services.background_service.remove", fake_remove)
 
 
 @pytest.fixture
