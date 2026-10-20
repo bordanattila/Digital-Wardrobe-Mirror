@@ -39,16 +39,18 @@ def _weather(temp_f: int) -> WeatherConditions:
 
 
 SAMPLE_WARDROBE = [
-    _item(1, "Summer Tee", "top", "t-shirt"),
-    _item(2, "Cozy Hoodie", "top", "hoodie"),
-    _item(3, "Denim Shorts", "bottom", "shorts"),
-    _item(4, "Blue Jeans", "bottom", "jeans"),
-    _item(5, "Party Skirt", "bottom", "Skirt"),  # mixed case
-    _item(6, "Dress Shoes", "shoes", "oxford"),
+    _item(1, "Summer Tee", "top", "t_shirt"),
+    _item(2, "Long Sleeve", "top", "long_sleeve"),
+    _item(3, "Cozy Hoodie", "mid_layer", "hoodie"),
+    _item(4, "Denim Shorts", "bottom", "shorts"),
+    _item(5, "Blue Jeans", "bottom", "jeans"),
+    _item(6, "Party Skirt", "bottom", "skirt"),
+    _item(7, "White Sneakers", "shoes", "sneakers"),
+    _item(8, "Winter Coat", "outer_layer", "coat"),
 ]
 
 
-def test_warm_weather_filters_tops_and_bottoms(db):
+def test_warm_weather_builds_outfits(db):
     with (
         patch(
             "app.services.outfit_service.get_current_weather",
@@ -63,15 +65,21 @@ def test_warm_weather_filters_tops_and_bottoms(db):
 
     assert isinstance(result, OutfitSuggestions)
     assert result.weather.temperature_fahrenheit == 75
-    assert {item.name for item in result.tops} == {"Summer Tee"}
-    assert {item.name for item in result.bottoms} == {"Denim Shorts", "Party Skirt"}
+    assert len(result.outfits) >= 1
+    look = result.outfits[0]
+    assert look.top[0].name == "Summer Tee"
+    assert look.bottom[0].name in {"Denim Shorts", "Party Skirt"}
+    assert look.shoes[0].name == "White Sneakers"
+    assert look.mid_layer == []
+    assert look.outer_layer == []
+    assert "Warm" in look.reason
 
 
-def test_cool_weather_filters_tops_and_bottoms(db):
+def test_mild_weather_can_include_mid_layer(db):
     with (
         patch(
             "app.services.outfit_service.get_current_weather",
-            return_value=_weather(55),
+            return_value=_weather(60),
         ),
         patch(
             "app.services.outfit_service.list_clothing_items",
@@ -80,12 +88,16 @@ def test_cool_weather_filters_tops_and_bottoms(db):
     ):
         result = outfit_service.generate_outfit_suggestions(db)
 
-    assert result.weather.temperature_fahrenheit == 55
-    assert {item.name for item in result.tops} == {"Cozy Hoodie"}
-    assert {item.name for item in result.bottoms} == {"Blue Jeans"}
+    assert result.weather.temperature_fahrenheit == 60
+    assert len(result.outfits) >= 1
+    look = result.outfits[0]
+    assert look.top[0].name == "Long Sleeve"
+    assert look.bottom[0].name == "Blue Jeans"
+    assert look.mid_layer[0].name == "Cozy Hoodie"
+    assert look.outer_layer == []
 
 
-def test_exactly_70_uses_warm_allowlists(db):
+def test_comfortable_band_at_70(db):
     with (
         patch(
             "app.services.outfit_service.get_current_weather",
@@ -98,11 +110,13 @@ def test_exactly_70_uses_warm_allowlists(db):
     ):
         result = outfit_service.generate_outfit_suggestions(db)
 
-    assert {item.name for item in result.tops} == {"Summer Tee"}
-    assert {item.name for item in result.bottoms} == {"Denim Shorts", "Party Skirt"}
+    assert len(result.outfits) >= 1
+    look = result.outfits[0]
+    assert look.top[0].name == "Summer Tee"
+    assert look.shoes[0].name == "White Sneakers"
 
 
-def test_empty_wardrobe_returns_empty_lists(db):
+def test_empty_wardrobe_returns_empty_outfits(db):
     with (
         patch(
             "app.services.outfit_service.get_current_weather",
@@ -115,8 +129,24 @@ def test_empty_wardrobe_returns_empty_lists(db):
     ):
         result = outfit_service.generate_outfit_suggestions(db)
 
-    assert result.tops == []
-    assert result.bottoms == []
+    assert result.outfits == []
+
+
+def test_missing_shoes_returns_empty_outfits(db):
+    wardrobe = [item for item in SAMPLE_WARDROBE if item.category != "shoes"]
+    with (
+        patch(
+            "app.services.outfit_service.get_current_weather",
+            return_value=_weather(75),
+        ),
+        patch(
+            "app.services.outfit_service.list_clothing_items",
+            return_value=wardrobe,
+        ),
+    ):
+        result = outfit_service.generate_outfit_suggestions(db)
+
+    assert result.outfits == []
 
 
 def test_weather_value_error_is_rewrapped(db):

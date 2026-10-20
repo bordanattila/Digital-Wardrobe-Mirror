@@ -27,7 +27,7 @@ describe('MirrorHome', () => {
     vi.mocked(getOutfitSuggestion).mockReset()
   })
 
-  it('shows loading inside the mirror shell, then weather and suggestions', async () => {
+  it('shows loading inside the mirror shell, then weather and outfit looks', async () => {
     vi.mocked(getOutfitSuggestion).mockResolvedValue(sampleSuggestion)
     renderMirror()
 
@@ -39,8 +39,10 @@ describe('MirrorHome', () => {
     expect(screen.getByText(/64°F/)).toBeInTheDocument()
     expect(screen.getByText('partly cloudy')).toBeInTheDocument()
     expect(screen.getByText('Testville')).toBeInTheDocument()
+    expect(screen.getByText('Mild — light mid layer')).toBeInTheDocument()
     expect(screen.getByText('Summer Tee')).toBeInTheDocument()
     expect(screen.getByText('Blue Jeans')).toBeInTheDocument()
+    expect(screen.getByText('White Sneakers')).toBeInTheDocument()
     expect(screen.getByAltText('Summer Tee')).toHaveAttribute(
       'src',
       '/api/wardrobe/1/image',
@@ -50,28 +52,26 @@ describe('MirrorHome', () => {
     ).toHaveAttribute('href', '/upload')
   })
 
-  it('marks the first top and bottom as selected', async () => {
+  it('marks the first look as selected', async () => {
     vi.mocked(getOutfitSuggestion).mockResolvedValue(sampleSuggestion)
     renderMirror()
 
     await screen.findByText('Summer Tee')
 
-    const topCard = screen.getByText('Summer Tee').closest('article')
-    const bottomCard = screen.getByText('Blue Jeans').closest('article')
-    expect(topCard).toHaveClass('outfit-card--selected')
-    expect(bottomCard).toHaveClass('outfit-card--selected')
+    const lookCard = screen.getByText('Mild — light mid layer').closest('article')
+    expect(lookCard).toHaveClass('look-card--selected')
   })
 
-  it('shows empty-slot messages when no matches', async () => {
+  it('shows an empty message when no outfits match', async () => {
     vi.mocked(getOutfitSuggestion).mockResolvedValue({
       ...sampleSuggestion,
-      tops: [],
-      bottoms: [],
+      outfits: [],
     })
     renderMirror()
 
-    expect(await screen.findByText('No matching tops')).toBeInTheDocument()
-    expect(screen.getByText('No matching bottoms')).toBeInTheDocument()
+    expect(
+      await screen.findByText('No matching outfits for this weather.'),
+    ).toBeInTheDocument()
   })
 
   it('shows an error inside the shell when the API fails', async () => {
