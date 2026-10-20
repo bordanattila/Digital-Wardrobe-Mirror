@@ -3,13 +3,21 @@ import { Link } from 'react-router-dom'
 import { createClothingItem } from '../api'
 import './upload_clothing_item.css'
 
-const CATEGORIES = ['top', 'bottom', 'jacket', 'shoes', 'accessory'] as const
+const CLOTHING_CATEGORIES = {
+  top: ['t_shirt', 'tank_top', 'long_sleeve', 'polo', 'blouse'],
+  bottom: ['jeans', 'shorts', 'leggings', 'trousers', 'skirt'],
+  mid_layer: ['hoodie', 'sweater', 'cardigan', 'fleece'],
+  outer_layer: ['coat', 'jacket', 'raincoat', 'parka'],
+  shoes: ['sneakers', 'sandals', 'boots', 'dress_shoes'],
+} as const
+
+type Category = keyof typeof CLOTHING_CATEGORIES
 
 export function UploadPage({ onCreated }: { onCreated?: () => void }) {
   const [name, setName] = useState('')
   const [color, setColor] = useState('')
   const [size, setSize] = useState('')
-  const [category, setCategory] = useState<string>('top')
+  const [category, setCategory] = useState<Category>('top')
   const [subcategory, setSubcategory] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -126,12 +134,15 @@ export function UploadPage({ onCreated }: { onCreated?: () => void }) {
           <select
             id="upload-category"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => {
+              setCategory(e.target.value)
+              setSubcategory('')
+            }}
             required
           >
-            {CATEGORIES.map((value) => (
-              <option key={value} value={value}>
-                {value}
+            {Object.keys(CLOTHING_CATEGORIES).map((category) => (
+              <option key={category} value={category}>
+                {category}
               </option>
             ))}
           </select>
@@ -139,27 +150,21 @@ export function UploadPage({ onCreated }: { onCreated?: () => void }) {
 
         <div className="upload-field">
           <label htmlFor="upload-subcategory">Subcategory</label>
-          <input
+          <select
             id="upload-subcategory"
             value={subcategory}
             onChange={(e) => setSubcategory(e.target.value)}
-            placeholder="e.g. t-shirt, jeans, hoodie"
             required
-            autoComplete="off"
-            list="upload-subcategory-suggestions"
-          />
-          <datalist id="upload-subcategory-suggestions">
-            <option value="t-shirt" />
-            <option value="tank top" />
-            <option value="hoodie" />
-            <option value="sweater" />
-            <option value="long-sleeve" />
-            <option value="jeans" />
-            <option value="pants" />
-            <option value="shorts" />
-            <option value="leggings" />
-            <option value="skirt" />
-          </datalist>
+          >
+            <option value="" disabled>
+              Select subcategory
+            </option>
+            {CLOTHING_CATEGORIES[category as keyof typeof CLOTHING_CATEGORIES].map((sub) => (
+              <option key={sub} value={sub}>
+                {sub.replaceAll('_', ' ')}  {/* label only */}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="upload-field upload-photo">

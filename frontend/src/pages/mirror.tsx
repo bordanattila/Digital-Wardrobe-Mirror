@@ -1,8 +1,37 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { clothingImageUrl, getOutfitSuggestion, type OutfitSuggestions } from '../api'
+import {
+  clothingImageUrl,
+  getOutfitSuggestion,
+  type ClothingItem,
+  type Outfit,
+  type OutfitSuggestions,
+} from '../api'
 import './mirror.css'
 
+const SLOT_ORDER = [
+  'outer_layer',
+  'mid_layer',
+  'top',
+  'bottom',
+  'shoes',
+] as const
+
+type SlotKey = (typeof SLOT_ORDER)[number]
+
+function piecesForOutfit(outfit: Outfit): { slot: SlotKey; item: ClothingItem }[] {
+  const pieces: { slot: SlotKey; item: ClothingItem }[] = []
+  for (const slot of SLOT_ORDER) {
+    for (const item of outfit[slot]) {
+      pieces.push({ slot, item })
+    }
+  }
+  return pieces
+}
+
+function slotLabel(slot: SlotKey): string {
+  return slot.replaceAll('_', ' ')
+}
 
 export function MirrorHome() {
   const [suggestion, setSuggestion] = useState<OutfitSuggestions | null>(null)
@@ -18,7 +47,6 @@ export function MirrorHome() {
       .finally(() => setIsLoading(false))
   }
 
-  // Clock: update every minute
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000)
@@ -34,8 +62,7 @@ export function MirrorHome() {
   }, [])
 
   const weather = suggestion?.weather
-  const tops = suggestion?.tops ?? []
-  const bottoms = suggestion?.bottoms ?? []
+  const outfits = suggestion?.outfits ?? []
 
   return (
     <div className="mirror-page">
@@ -54,69 +81,46 @@ export function MirrorHome() {
             <section className="mirror-panel">
               <h2>Weather</h2>
               <p style={{ fontSize: '2rem', margin: 0 }}>
-                {weather.temperature_fahrenheit}°F {' '}
-                <img src={`https://openweathermap.org/img/wn/${weather.icon}.png`} alt={weather.icon} />
+                {weather.temperature_fahrenheit}°F{' '}
+                <img
+                  src={`https://openweathermap.org/img/wn/${weather.icon}.png`}
+                  alt={weather.icon}
+                />
               </p>
               <p>{weather.conditions}</p>
               <p>{weather.city ?? 'Local'}</p>
             </section>
+
             <section className="mirror-panel">
-              <h2>Today's Outfit Suggestions</h2>
-              <h3>Suggested tops</h3>
-              {tops.length === 0 ? (
-                <p>No matching tops</p>
+              <h2>Today&apos;s Outfit Suggestions</h2>
+              {outfits.length === 0 ? (
+                <p>No matching outfits for this weather.</p>
               ) : (
-                <div className="outfit-row">
-                  {tops.map((item, index) => {
-                    const imageUrl = clothingImageUrl(item.id)
+                <div className="look-list">
+                  {outfits.map((outfit, index) => {
+                    const pieces = piecesForOutfit(outfit)
                     const selected = index === 0
+
                     return (
                       <article
-                        key={item.id}
+                        key={`look-${index}-${outfit.top[0]?.id ?? index}`}
                         className={
-                          selected ? 'outfit-card outfit-card--selected' : 'outfit-card'
-                        }
-                        style={
-                          selected
-                            ? ({
-                              '--outfit-card-image': `url(${imageUrl})`,
-                            } as CSSProperties)
-                            : undefined
+                          selected ? 'look-card look-card--selected' : 'look-card'
                         }
                       >
-                        <img src={imageUrl} alt={item.name} />
-                        <div>{item.name}</div>
-                      </article>
-                    )
-                  })}
-                </div>
-              )}
-            </section>
-            <section className="mirror-panel">
-              <h3>Suggested bottoms</h3>
-              {bottoms.length === 0 ? (
-                <p>No matching bottoms</p>
-              ) : (
-                <div className="outfit-row">
-                  {bottoms.map((item, index) => {
-                    const imageUrl = clothingImageUrl(item.id)
-                    const selected = index === 0
-                    return (
-                      <article
-                        key={item.id}
-                        className={
-                          selected ? 'outfit-card outfit-card--selected' : 'outfit-card'
-                        }
-                        style={
-                          selected
-                            ? ({
-                              '--outfit-card-image': `url(${imageUrl})`,
-                            } as CSSProperties)
-                            : undefined
-                        }
-                      >
-                        <img src={imageUrl} alt={item.name} />
-                        <div>{item.name}</div>
+                        <p className="look-reason">{outfit.reason}</p>
+                        <div className="look-pieces">
+                          {pieces.map(({ slot, item }) => (
+                            <div key={`${slot}-${item.id}`} className="look-piece">
+                              <img
+                                src={clothingImageUrl(item.id)}
+                                alt={item.name}
+                              />
+                              <div className="look-piece-slot">{slotLabel(slot)}</div>
+                              <div className="look-piece-name">{item.name}</div>
+                            </div>
+                          ))}
+                        </div>
                       </article>
                     )
                   })}
@@ -125,7 +129,10 @@ export function MirrorHome() {
             </section>
           </>
         )}
-        <button type="button" onClick={loadSuggestion}>Suggest again</button>
+
+        <button type="button" onClick={loadSuggestion}>
+          Suggest again
+        </button>
         <Link to="/upload">Add clothing (phone)</Link>
       </aside>
     </div>

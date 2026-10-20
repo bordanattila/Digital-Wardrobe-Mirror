@@ -34,10 +34,20 @@ export type WeatherConditions = {
   city: string | null
 }
 
+/** One suggested look — slot lists match the backend Outfit schema. */
+export type Outfit = {
+  top: ClothingItem[]
+  bottom: ClothingItem[]
+  shoes: ClothingItem[]
+  mid_layer: ClothingItem[]
+  outer_layer: ClothingItem[]
+  score: number
+  reason: string
+}
+
 export type OutfitSuggestions = {
   weather: WeatherConditions
-  tops: ClothingItem[]
-  bottoms: ClothingItem[]
+  outfits: Outfit[]
 }
 
 export function getHealth() {

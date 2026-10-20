@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.schemas.clothing import ClothingItem
-from app.schemas.outfit import OutfitSuggestions
+from app.schemas.outfit import Outfit, OutfitSuggestions
 from app.schemas.weather import WeatherConditions
 from app.utils import rate_limiter
 
@@ -27,6 +27,33 @@ def clear_rate_limiter():
 
 
 def _sample_suggestion() -> OutfitSuggestions:
+    top = ClothingItem(
+        id=1,
+        name="Summer Tee",
+        color="white",
+        size="M",
+        category="top",
+        subcategory="t_shirt",
+        image_path="tee.png",
+    )
+    bottom = ClothingItem(
+        id=2,
+        name="Denim Shorts",
+        color="blue",
+        size="M",
+        category="bottom",
+        subcategory="shorts",
+        image_path="shorts.png",
+    )
+    shoes = ClothingItem(
+        id=3,
+        name="White Sneakers",
+        color="white",
+        size="M",
+        category="shoes",
+        subcategory="sneakers",
+        image_path="sneakers.png",
+    )
     return OutfitSuggestions(
         weather=WeatherConditions(
             temperature_celsius=22,
@@ -35,26 +62,15 @@ def _sample_suggestion() -> OutfitSuggestions:
             conditions="clear sky",
             city="New York",
         ),
-        tops=[
-            ClothingItem(
-                id=1,
-                name="Summer Tee",
-                color="white",
-                size="M",
-                category="top",
-                subcategory="t-shirt",
-                image_path="tee.png",
-            )
-        ],
-        bottoms=[
-            ClothingItem(
-                id=2,
-                name="Denim Shorts",
-                color="blue",
-                size="M",
-                category="bottom",
-                subcategory="shorts",
-                image_path="shorts.png",
+        outfits=[
+            Outfit(
+                top=[top],
+                bottom=[bottom],
+                shoes=[shoes],
+                mid_layer=[],
+                outer_layer=[],
+                score=0,
+                reason="Comfortable — light layers",
             )
         ],
     )
@@ -71,8 +87,9 @@ def test_suggest_outfit_success(client):
     assert response.status_code == 200
     body = response.json()
     assert body["weather"]["temperature_fahrenheit"] == 72
-    assert body["tops"][0]["name"] == "Summer Tee"
-    assert body["bottoms"][0]["name"] == "Denim Shorts"
+    assert body["outfits"][0]["top"][0]["name"] == "Summer Tee"
+    assert body["outfits"][0]["bottom"][0]["name"] == "Denim Shorts"
+    assert body["outfits"][0]["shoes"][0]["name"] == "White Sneakers"
 
 
 def test_suggest_outfit_value_error_returns_502(client):

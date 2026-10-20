@@ -3,7 +3,7 @@ line-length = 88
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]  # pycodestyle, pyflakes, isort
+select = ["E", "F", "I", "N"]  # pycodestyle, pyflakes, isort, pep8-naming
 
 [tool.ruff.format]
 quote-style = "double"

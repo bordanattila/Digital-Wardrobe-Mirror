@@ -1,79 +1,87 @@
 """Outfit use-case / orchestration layer."""
 
 import logging
+from itertools import islice, product
 
 import requests
 
 from app.database import Database
-from app.schemas.outfit import OutfitSuggestions
+from app.schemas.clothing import ClothingItem
+from app.schemas.outfit import Outfit, OutfitSuggestions
 from app.services.wardrobe_service import list_clothing_items
 from app.services.weather_service import get_current_weather
+from app.utils.temperature_bands import determine_temperature_band
 
 logger = logging.getLogger(__name__)
 
+MAX_OUTFITS = 5
+REQUIRED_CATEGORIES = ("top", "bottom", "shoes")
+
+
+def _items_for_slot(
+    wardrobe: list[ClothingItem],
+    category: str,
+    allowed: frozenset[str],
+) -> list[ClothingItem]:
+    return [
+        item
+        for item in wardrobe
+        if item.category == category and item.subcategory in allowed
+    ]
+
 
 def generate_outfit_suggestions(db: Database) -> OutfitSuggestions:
-    """
-    Generate outfit suggestions based on the current weather and the full wardrobe.
-    """
+    """Generate outfit suggestions based on weather bands and the wardrobe."""
 
     try:
         current_weather = get_current_weather()
-
         logger.info(
-            f"Current weather: {current_weather.temperature_fahrenheit}, "
-            f"{current_weather.city}"
+            "Current weather: %s, %s",
+            current_weather.temperature_fahrenheit,
+            current_weather.city,
         )
     except ValueError as exc:
         logger.warning(
             "Error getting current weather (value error): %s", type(exc).__name__
         )
-        raise ValueError("Error getting current weather")
+        raise ValueError("Error getting current weather") from exc
     except requests.exceptions.RequestException as exc:
         logger.warning(
             "Error getting current weather (network error): %s", type(exc).__name__
         )
         raise
 
-    # Get the full wardrobe from the database by calling list_clothing_items() function
+    band = determine_temperature_band(current_weather.temperature_fahrenheit)
     full_wardrobe = list_clothing_items(db)
 
-    cool_weather_tops = {"jumper", "sweater", "hoodie", "long-sleeve", "longsleeve"}
-    warm_weather_tops = {"t-shirt", "tank top", "shirt", "tank", "tee", "polo"}
-    cool_weather_bottoms = {"jeans", "pants", "trousers", "leggings"}
-    warm_weather_bottoms = {
-        "shorts",
-        "skirt",
-    }
+    pooled: dict[str, list[ClothingItem]] = {}
+    for category, allowed_subs in band.allow.items():
+        pooled[category] = _items_for_slot(full_wardrobe, category, allowed_subs)
 
-    suggestable_tops_list = []
-    suggestable_bottoms_list = []
+    if any(not pooled.get(category) for category in REQUIRED_CATEGORIES):
+        logger.info("Missing required categories for band %s", band.label)
+        return OutfitSuggestions(outfits=[], weather=current_weather)
 
-    # Generate an outfit based on the current weather and the full wardrobe
-    if current_weather.temperature_fahrenheit >= 70:
-        logger.info("Generating outfit for warm weather")
-        tops_allowed, bottoms_allowed = warm_weather_tops, warm_weather_bottoms
-    else:
-        logger.info("Generating outfit for cool weather")
-        tops_allowed, bottoms_allowed = cool_weather_tops, cool_weather_bottoms
+    # Combine only slots this band uses and that have candidates
+    slot_order = [category for category in band.allow if pooled.get(category)]
+    combos = product(*(pooled[category] for category in slot_order))
 
-    for outfit_item in full_wardrobe:
-        if (
-            outfit_item.category.lower().strip() in tops_allowed
-            or outfit_item.subcategory.lower().strip() in tops_allowed
-        ):
-            suggestable_tops_list.append(outfit_item)
-        if (
-            outfit_item.category.lower().strip() in bottoms_allowed
-            or outfit_item.subcategory.lower().strip() in bottoms_allowed
-        ):
-            suggestable_bottoms_list.append(outfit_item)
+    outfits: list[Outfit] = []
+    for combo in islice(combos, MAX_OUTFITS):
+        by_slot = dict(zip(slot_order, combo, strict=True))
+        outfits.append(
+            Outfit(
+                top=[by_slot["top"]],
+                bottom=[by_slot["bottom"]],
+                shoes=[by_slot["shoes"]],
+                mid_layer=[by_slot["mid_layer"]] if "mid_layer" in by_slot else [],
+                outer_layer=[by_slot["outer_layer"]]
+                if "outer_layer" in by_slot
+                else [],
+                score=0,
+                reason=band.label,
+            )
+        )
 
-    logger.info(f"Suggestable tops list length: {len(suggestable_tops_list)}")
-    logger.info(f"Suggestable bottoms list length: {len(suggestable_bottoms_list)}")
-
-    return OutfitSuggestions(
-        tops=suggestable_tops_list,
-        bottoms=suggestable_bottoms_list,
-        weather=current_weather,
-    )
+    logger.info("Generated %s outfits for band %s", len(outfits), band.label)
+    return OutfitSuggestions(outfits=outfits, weather=current_weather)
