@@ -12,10 +12,10 @@ vi.mock('../api', () => ({
 
 import { createClothingItem } from '../api'
 
-function renderUpload() {
+function renderUpload(onCreated?: () => void) {
   return render(
     <MemoryRouter>
-      <UploadPage />
+      <UploadPage onCreated={onCreated} />
     </MemoryRouter>,
   )
 }
@@ -33,10 +33,7 @@ async function fillForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByPlaceholderText('Color'), 'white')
   await user.type(screen.getByPlaceholderText('Size'), 'M')
   await user.selectOptions(screen.getByLabelText('Category'), 'top')
-  await user.type(
-    screen.getByPlaceholderText(/e\.g\. t-shirt/),
-    't-shirt',
-  )
+  await user.selectOptions(screen.getByLabelText('Subcategory'), 't_shirt')
   await user.upload(
     fileInput(),
     new File(['fake-image'], 'tee.png', { type: 'image/png' }),
@@ -48,16 +45,12 @@ describe('UploadPage', () => {
     vi.mocked(createClothingItem).mockReset()
   })
 
-  it('submits FormData with the expected fields', async () => {
+  it('submits FormData with taxonomy category and subcategory ids', async () => {
     const user = userEvent.setup()
     vi.mocked(createClothingItem).mockResolvedValue(sampleTop)
     const onCreated = vi.fn()
 
-    const { container } = render(
-      <MemoryRouter>
-        <UploadPage onCreated={onCreated} />
-      </MemoryRouter>,
-    )
+    const { container } = renderUpload(onCreated)
     await fillForm(user)
 
     const form = container.querySelector('form')
@@ -75,11 +68,25 @@ describe('UploadPage', () => {
     expect(body.get('color')).toBe('white')
     expect(body.get('size')).toBe('M')
     expect(body.get('category')).toBe('top')
-    expect(body.get('subcategory')).toBe('t-shirt')
+    expect(body.get('subcategory')).toBe('t_shirt')
     expect(body.get('image')).toBeInstanceOf(File)
 
     expect(await screen.findByText('Created #1: Summer Tee')).toBeInTheDocument()
     expect(onCreated).toHaveBeenCalled()
+  })
+
+  it('resets subcategory options when category changes', async () => {
+    const user = userEvent.setup()
+    renderUpload()
+
+    await user.selectOptions(screen.getByLabelText('Category'), 'top')
+    await user.selectOptions(screen.getByLabelText('Subcategory'), 't_shirt')
+    expect(screen.getByLabelText('Subcategory')).toHaveValue('t_shirt')
+
+    await user.selectOptions(screen.getByLabelText('Category'), 'shoes')
+    expect(screen.getByLabelText('Subcategory')).toHaveValue('')
+    expect(screen.getByRole('option', { name: 'sneakers' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 't shirt' })).not.toBeInTheDocument()
   })
 
   it('shows failure status when upload errors', async () => {
@@ -105,10 +112,7 @@ describe('UploadPage', () => {
     await user.type(screen.getByPlaceholderText('Color'), 'white')
     await user.type(screen.getByPlaceholderText('Size'), 'M')
     await user.selectOptions(screen.getByLabelText('Category'), 'top')
-    await user.type(
-      screen.getByPlaceholderText(/e\.g\. t-shirt/),
-      't-shirt',
-    )
+    await user.selectOptions(screen.getByLabelText('Subcategory'), 't_shirt')
 
     const form = container.querySelector('form')
     if (!form) throw new Error('form not found')
