@@ -44,7 +44,7 @@ def test_create_item_success(db, image_dirs):
         color="red",
         size="M",
         category="top",
-        subcategory="t-shirt",
+        subcategory="t_shirt",
         filename="shirt.png",
         image_bytes=png,
     )
@@ -67,7 +67,7 @@ def test_create_rejects_unsupported_extension(db, image_dirs):
             color="red",
             size="M",
             category="top",
-            subcategory="t-shirt",
+            subcategory="t_shirt",
             filename="notes.txt",
             image_bytes=b"hello",
         )
@@ -83,7 +83,7 @@ def test_create_rejects_oversized_file(db, image_dirs):
             color="red",
             size="M",
             category="top",
-            subcategory="t-shirt",
+            subcategory="t_shirt",
             filename="huge.png",
             image_bytes=huge,
         )
@@ -99,7 +99,7 @@ def test_create_cleans_up_original_when_process_fails(db, image_dirs):
             color="red",
             size="M",
             category="top",
-            subcategory="t-shirt",
+            subcategory="t_shirt",
             filename="bad.png",
             image_bytes=b"not-a-real-png",
         )
@@ -132,7 +132,7 @@ def test_remove_clothing_item_by_id_deletes_files(db, image_dirs):
         color="red",
         size="M",
         category="top",
-        subcategory="t-shirt",
+        subcategory="t_shirt",
         filename="shirt.png",
         image_bytes=png,
     )

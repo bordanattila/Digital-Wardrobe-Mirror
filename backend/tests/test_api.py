@@ -39,7 +39,7 @@ def _create_item(client, name="Test Shirt"):
             "color": "red",
             "size": "M",
             "category": "top",
-            "subcategory": "t-shirt",
+            "subcategory": "t_shirt",
         },
         files={"image": ("shirt.png", png, "image/png")},
     )
@@ -123,7 +123,7 @@ def test_update_wardrobe_item_not_found(client):
             "color": "red",
             "size": "M",
             "category": "top",
-            "subcategory": "t-shirt",
+            "subcategory": "t_shirt",
         },
     )
     assert response.status_code == 404
@@ -155,7 +155,7 @@ def test_create_rejects_bad_extension(client):
             "color": "red",
             "size": "M",
             "category": "top",
-            "subcategory": "t-shirt",
+            "subcategory": "t_shirt",
         },
         files={"image": ("notes.txt", b"hello", "text/plain")},
     )
@@ -171,7 +171,7 @@ def test_create_rejects_corrupt_image(client, image_dirs):
             "color": "red",
             "size": "M",
             "category": "top",
-            "subcategory": "t-shirt",
+            "subcategory": "t_shirt",
         },
         files={"image": ("bad.png", b"not-a-png", "image/png")},
     )
